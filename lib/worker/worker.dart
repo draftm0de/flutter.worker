@@ -18,10 +18,9 @@ typedef WorkerExpired = void Function(String taskId);
 /// It exposes a handful of static helpers to start/cancel a worker and
 /// delivers lifecycle callbacks from the underlying platform channel.
 class DraftModeWorker {
-  DraftModeWorker._();
+  DraftModeWorker._(); // coverage:ignore-line
   static const _ch = MethodChannel('timed_worker_ios/channel');
 
-  static StreamController<Map<String, dynamic>>? _events;
   static WorkerStarted? _onStarted;
   static WorkerProgress? _onProgress;
   static WorkerCompleted? _onCompleted;

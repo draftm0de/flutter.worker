@@ -23,4 +23,4 @@ dev_dependencies:
     sdk: flutter
 
 repository: https://github.com/draftm0de/flutter.worker
-issue_tracking: https://github.com/draftm0de/flutter.worker/issues
+issue_tracker: https://github.com/draftm0de/flutter.worker/issues

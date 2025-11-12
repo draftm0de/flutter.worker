@@ -39,7 +39,7 @@ class WorkerEvent {
 /// Tiny event bus that exposes the worker lifecycle as a broadcast [Stream].
 /// Apps can listen to it to keep UI (or other layers) in sync with iOS.
 class DraftModeWorkerEvents {
-  DraftModeWorkerEvents._();
+  DraftModeWorkerEvents._(); // coverage:ignore-line
 
   static final StreamController<WorkerEvent> _controller =
       StreamController<WorkerEvent>.broadcast();

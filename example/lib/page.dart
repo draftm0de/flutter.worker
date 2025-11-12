@@ -9,9 +9,7 @@ class DemoPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(title),
-      ),
+      navigationBar: CupertinoNavigationBar(middle: Text(title)),
       child: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
@@ -38,18 +36,12 @@ class _HeaderCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 40),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border.all(
-          color: CupertinoColors.systemGrey,
-          width: 0.8,
-        ),
+        border: Border.all(color: CupertinoColors.systemGrey, width: 0.8),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
-          Image.asset(
-            'assets/images/logo.png',
-            height: 80,
-          ),
+          Image.asset('assets/images/logo.png', height: 80),
           const SizedBox(width: 16),
           const Expanded(
             child: Column(
@@ -57,10 +49,7 @@ class _HeaderCard extends StatelessWidget {
               children: [
                 Text(
                   'DraftMode',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.w600),
                 ),
                 SizedBox(height: 4),
                 Text(

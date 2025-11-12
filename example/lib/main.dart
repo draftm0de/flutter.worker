@@ -55,8 +55,9 @@ class _TimedWorkerDemoState extends State<TimedWorkerDemo> {
   bool isRunning = false;
   Duration? remaining;
   String? taskId;
-  final TextEditingController _secondsController =
-      TextEditingController(text: '20');
+  final TextEditingController _secondsController = TextEditingController(
+    text: '20',
+  );
   String? _inputError;
   StreamSubscription<WorkerEvent>? _workerEventsSub;
   String? _completionMessage;
@@ -94,7 +95,8 @@ class _TimedWorkerDemoState extends State<TimedWorkerDemo> {
             isRunning = false;
           }
           remaining = Duration.zero;
-          _completionMessage = 'completed at ${_formatTimestamp(DateTime.now())}';
+          _completionMessage =
+              'completed at ${_formatTimestamp(DateTime.now())}';
           break;
         case WorkerEventType.expired:
           if (taskId == event.taskId) {
@@ -178,10 +180,7 @@ class _TimedWorkerDemoState extends State<TimedWorkerDemo> {
     return DemoPage(
       title: 'Timed Worker iOS Demo',
       children: [
-        Text(
-          'Task ID: ${taskId ?? "-"}',
-          style: const TextStyle(fontSize: 16),
-        ),
+        Text('Task ID: ${taskId ?? "-"}', style: const TextStyle(fontSize: 16)),
         const SizedBox(height: 10),
         Text(
           statusText,
@@ -197,10 +196,7 @@ class _TimedWorkerDemoState extends State<TimedWorkerDemo> {
           margin: const EdgeInsets.symmetric(horizontal: 40),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            border: Border.all(
-              color: CupertinoColors.systemGrey,
-              width: 0.8,
-            ),
+            border: Border.all(color: CupertinoColors.systemGrey, width: 0.8),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Column(
