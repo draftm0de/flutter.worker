@@ -1,0 +1,82 @@
+# DraftMode Worker (iOS)
+
+DraftMode Worker is a lightweight Flutter plugin that wraps iOS background tasks
+with a simple timer-driven API. It ships with:
+
+- `DraftModeWorker` – starts/cancels workers and exposes lifecycle callbacks via a platform channel.
+- `DraftModeWorkerEvents` – a broadcast stream so multiple widgets/services can observe the worker without wiring direct callbacks.
+
+The `example/` app demonstrates how to hook those pieces into a Cupertino UI, including a reusable `DemoPage`, validation, and real-time countdown updates.
+
+## Quick Start
+
+```dart
+import 'package:draftmode/worker.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  DraftModeWorker.init(
+    onStarted: (id) => DraftModeWorkerEvents.dispatch(WorkerEvent.started(id)),
+    onProgress: (id, remaining) =>
+        DraftModeWorkerEvents.dispatch(WorkerEvent.progress(id, remaining)),
+    onCompleted: (id) =>
+        DraftModeWorkerEvents.dispatch(WorkerEvent.completed(id)),
+    onExpired: (id) =>
+        DraftModeWorkerEvents.dispatch(WorkerEvent.expired(id)),
+  );
+
+  runApp(const MyApp());
+}
+```
+
+### Launch a worker
+
+```dart
+await DraftModeWorker.start(
+  taskId: 'my-id',
+  duration: const Duration(minutes: 2),
+);
+```
+
+### Cancel the worker
+
+```dart
+await DraftModeWorker.cancel();
+```
+
+### Subscribe to lifecycle events
+
+```dart
+final sub = DraftModeWorkerEvents.stream.listen((event) {
+  switch (event.type) {
+    case WorkerEventType.progress:
+      debugPrint('Remaining ${event.remaining}');
+      break;
+    case WorkerEventType.completed:
+      debugPrint('Done!');
+      break;
+    default:
+      break;
+  }
+});
+```
+
+## File Tour
+
+| Location | Purpose |
+| --- | --- |
+| `lib/worker.dart` | Platform-channel bridge and public API (`DraftModeWorker`). |
+| `lib/event.dart` | Broadcast stream & event model for worker lifecycle. |
+| `example/lib/page.dart` | Reusable demo chrome (logo/header/buttons). |
+| `example/lib/main.dart` | Full sample integrating UI + worker events. |
+
+## Development Notes
+
+- The example depends on the facade package (`package:draftmode/worker.dart`), mirroring real app usage.
+- Run `flutter analyze lib example/lib` before committing; keep both plugin and demo lint-clean.
+- When tweaking native iOS code, run `flutter clean` if you encounter stale build artifacts.
+
+## License
+
+MIT © DraftMode

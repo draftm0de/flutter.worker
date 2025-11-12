@@ -1,0 +1,8 @@
+/.idea/
+/build/
+/.dart_tool/
+/example/.dart_tool/
+/example/build/
+/doc/api/
+coverage/html/
+coverage/lcov.info
