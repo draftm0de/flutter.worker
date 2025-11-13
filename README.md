@@ -6,7 +6,7 @@ with a simple timer-driven API. It ships with:
 - `DraftModeWorker` – starts/cancels workers and exposes lifecycle callbacks via a platform channel.
 - `DraftModeWorkerEvents` – a broadcast stream so multiple widgets/services can observe the worker without wiring direct callbacks.
 
-The `example/` app demonstrates how to hook those pieces into a Cupertino UI, including a reusable `DemoPage`, validation, and real-time countdown updates.
+The `example/` app demonstrates how to hook those pieces into a Cupertino UI. It now consumes the shared `DraftModeExamplePageWidget` from `package:draftmode/example.dart` so every plugin demo in the DraftMode workspace can reuse the same header/branding without duplicating code.
 
 ## Quick Start
 
@@ -62,18 +62,13 @@ final sub = DraftModeWorkerEvents.stream.listen((event) {
 });
 ```
 
-## File Tour
+## Example app
 
-| Location | Purpose |
-| --- | --- |
-| `lib/worker.dart` | Platform-channel bridge and public API (`DraftModeWorker`). |
-| `lib/event.dart` | Broadcast stream & event model for worker lifecycle. |
-| `example/lib/page.dart` | Reusable demo chrome (logo/header/buttons). |
-| `example/lib/main.dart` | Full sample integrating UI + worker events. |
+The `example/` folder contains a Cupertino demo that wires the plugin into a duration picker, status banner, and countdown display. It embeds the shared DraftMode example shell via `package:draftmode/example.dart`, so all branding/UI chrome now lives in the dedicated `draftmode_example` package. Assets bundled with that package are loaded by specifying `package: 'draftmode_example'` in `Image.asset`, which happens inside the shared widget—no extra work is required in this repo's `example/` after importing the facade.
 
 ## Development Notes
 
-- The example depends on the facade package (`package:draftmode/worker.dart`), mirroring real app usage.
+- The example depends on the facade package (`package:draftmode/worker.dart` and `package:draftmode/example.dart`), mirroring real app usage.
 - Run `flutter analyze lib example/lib` before committing; keep both plugin and demo lint-clean.
 - When tweaking native iOS code, run `flutter clean` if you encounter stale build artifacts.
 

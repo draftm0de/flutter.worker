@@ -1,10 +1,9 @@
 import 'dart:async';
 
 import 'package:draftmode/worker.dart';
+import 'package:draftmode/example.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-
-import 'page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -177,7 +176,7 @@ class _TimedWorkerDemoState extends State<TimedWorkerDemo> {
         ? CupertinoColors.activeGreen
         : CupertinoColors.label;
 
-    return DemoPage(
+    return DraftModeExamplePageWidget(
       title: 'Timed Worker iOS Demo',
       children: [
         Text('Task ID: ${taskId ?? "-"}', style: const TextStyle(fontSize: 16)),
