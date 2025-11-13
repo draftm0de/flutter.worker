@@ -36,14 +36,9 @@ class TimedWorkerExampleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoApp(
+    return const CupertinoApp(
       debugShowCheckedModeBanner: false,
-      home: DraftModeWorkerWatcher(
-        onSubmitNow: (taskId) async {
-          debugPrint('🚀 Submitting task $taskId early');
-        },
-        child: const TimedWorkerDemo(),
-      ),
+      home: DraftModeWorkerWatcher(child: TimedWorkerDemo()),
     );
   }
 }

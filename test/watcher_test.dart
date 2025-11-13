@@ -1,7 +1,6 @@
-import 'dart:async';
-
 import 'package:draftmode_worker/worker.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -11,10 +10,12 @@ void main() {
   const channel = MethodChannel('timed_worker_ios/channel');
   Map<String, Object?> statusResponse = const {'isRunning': false};
   int cancelCalls = 0;
+  int completedCalls = 0;
 
   setUp(() {
     statusResponse = const {'isRunning': false};
     cancelCalls = 0;
+    completedCalls = 0;
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
@@ -23,6 +24,9 @@ void main() {
           }
           if (call.method == 'cancel') {
             cancelCalls += 1;
+          }
+          if (call.method == 'completed') {
+            completedCalls += 1;
           }
           return null;
         });
@@ -33,17 +37,9 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  Future<void> pumpWatcher(
-    WidgetTester tester, {
-    Future<void> Function(String? taskId)? onSubmitNow,
-  }) {
+  Future<void> pumpWatcher(WidgetTester tester) {
     return tester.pumpWidget(
-      CupertinoApp(
-        home: DraftModeWorkerWatcher(
-          onSubmitNow: onSubmitNow,
-          child: const Placeholder(),
-        ),
-      ),
+      const MaterialApp(home: DraftModeWorkerWatcher(child: Placeholder())),
     );
   }
 
@@ -62,36 +58,25 @@ void main() {
     expect(find.text('Active Worker'), findsOneWidget);
     expect(find.textContaining('Task: demo'), findsOneWidget);
 
-    await tester.tap(find.text('Leave running'));
+    await tester.tap(find.text('No'));
     await tester.pumpAndSettle();
   });
 
-  testWidgets('submit now cancels worker and notifies callback', (
-    tester,
-  ) async {
-    final submitted = <String?>[];
-    final completer = Completer<void>();
+  testWidgets('confirming submits the worker', (tester) async {
     statusResponse = const {
       'isRunning': true,
       'remainingMs': 500,
       'taskId': 'abc',
     };
 
-    await pumpWatcher(
-      tester,
-      onSubmitNow: (taskId) async {
-        submitted.add(taskId);
-        completer.complete();
-      },
-    );
+    await pumpWatcher(tester);
     await tester.pump();
 
-    await tester.tap(find.text('Submit now'));
+    await tester.tap(find.text('Yes'));
     await tester.pumpAndSettle();
-    await completer.future;
 
-    expect(cancelCalls, 1);
-    expect(submitted, ['abc']);
+    expect(completedCalls, 1);
+    expect(cancelCalls, 0);
   });
 
   testWidgets('resumed lifecycle triggers dialog', (tester) async {

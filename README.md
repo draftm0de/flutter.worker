@@ -46,6 +46,12 @@ await DraftModeWorker.start(
 await DraftModeWorker.cancel();
 ```
 
+### Complete the worker early
+
+```dart
+await DraftModeWorker.completed();
+```
+
 ### Subscribe to lifecycle events
 
 ```dart
@@ -71,18 +77,15 @@ app returns to the foreground:
 
 ```dart
 return CupertinoApp(
-  home: DraftModeWorkerWatcher(
-    onSubmitNow: (taskId) async {
-      await flushPendingDraft(taskId);
-    },
-    child: const DraftEditorPage(),
+  home: const DraftModeWorkerWatcher(
+    child: DraftEditorPage(),
   ),
 );
 ```
 
-The watcher automatically cancels the iOS worker when the user taps **Submit
-now** or **Cancel**. The optional callback is the perfect place to push any
-domain-specific logic (e.g. sending the final draft to your backend).
+The watcher automatically calls `DraftModeWorker.completed()` when the user
+confirms and `DraftModeWorker.cancel()` when they back out—no extra callback
+plumbing required.
 
 ## Example app
 

@@ -1,5 +1,4 @@
-import 'dart:async';
-
+import 'package:draftmode_ui/ui.dart';
 import 'package:flutter/cupertino.dart';
 
 import 'worker.dart';
@@ -17,17 +16,7 @@ class DraftModeWorkerWatcher extends StatefulWidget {
   /// active. Usually this is the app's `home` widget or a shell around it.
   final Widget child;
 
-  /// Optional callback that fires when the user chooses **Submit now**.
-  ///
-  /// The watcher already cancels the iOS task; this hook gives the host app a
-  /// chance to flush any pending work immediately afterwards.
-  final FutureOr<void> Function(String? taskId)? onSubmitNow;
-
-  const DraftModeWorkerWatcher({
-    super.key,
-    required this.child,
-    this.onSubmitNow,
-  });
+  const DraftModeWorkerWatcher({super.key, required this.child});
 
   @override
   State<DraftModeWorkerWatcher> createState() => _DraftModeWorkerWatcherState();
@@ -75,12 +64,18 @@ class _DraftModeWorkerWatcherState extends State<DraftModeWorkerWatcher>
         milliseconds: (status['remainingMs'] as num?)?.toInt() ?? 0,
       );
 
-      await _showWorkerDialog(
-        context,
-        taskId: status['taskId']?.toString(),
-        remaining: remaining,
-        onSubmitNow: widget.onSubmitNow,
+      final taskId = status['taskId']?.toString();
+      final confirm = await DraftModeUIDialog.show(
+        context: context,
+        title: 'Active Worker',
+        message: 'Task: $taskId is still running. Submit now?',
+        autoConfirm: remaining,
       );
+      if (confirm == true) {
+        await DraftModeWorker.completed();
+      } else if (confirm == false) {
+        await DraftModeWorker.cancel();
+      }
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
@@ -101,59 +96,3 @@ class _DraftModeWorkerWatcherState extends State<DraftModeWorkerWatcher>
     return widget.child;
   }
 }
-
-Future<void> _showWorkerDialog(
-  BuildContext context, {
-  required String? taskId,
-  required Duration remaining,
-  FutureOr<void> Function(String? taskId)? onSubmitNow,
-}) async {
-  final remainingText =
-      '${remaining.inMinutes}:${(remaining.inSeconds % 60).toString().padLeft(2, '0')}';
-
-  final action = await showCupertinoDialog<WorkerAction>(
-    context: context, // ← CORRECT, uses current screen context
-    builder: (ctx) => CupertinoAlertDialog(
-      title: const Text('Active Worker'),
-      content: Text(
-        'Task: $taskId\n'
-        'Remaining: $remainingText',
-      ),
-      actions: [
-        CupertinoDialogAction(
-          child: const Text('Leave running'),
-          onPressed: () => Navigator.of(ctx).pop(WorkerAction.keep),
-        ),
-        CupertinoDialogAction(
-          isDefaultAction: true,
-          child: const Text('Submit now'),
-          onPressed: () => Navigator.of(ctx).pop(WorkerAction.submit),
-        ),
-        CupertinoDialogAction(
-          isDestructiveAction: true,
-          child: const Text('Cancel'),
-          onPressed: () => Navigator.of(ctx).pop(WorkerAction.cancel),
-        ),
-      ],
-    ),
-  );
-
-  // Handle user choice
-  switch (action) {
-    case WorkerAction.submit:
-      await DraftModeWorker.cancel();
-      if (onSubmitNow != null) {
-        await Future.sync(() => onSubmitNow(taskId));
-      }
-      break;
-    case WorkerAction.cancel:
-      await DraftModeWorker.cancel();
-      break;
-    case WorkerAction.keep:
-    case null:
-      break;
-  }
-}
-
-/// Possible actions surfaced by the watcher dialog.
-enum WorkerAction { keep, submit, cancel }

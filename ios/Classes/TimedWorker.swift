@@ -72,6 +72,17 @@ final class TimedWorker {
     completion(true)
   }
 
+  func complete(emit: @escaping (_ event: String, _ payload: [String: Any]) -> Void) {
+    guard isRunning else { return }
+    isRunning = false
+    stopTimer()
+    endBG()
+    remainingMs = 0
+    storedTaskId = nil
+    emit("worker_completed", ["taskId": taskId ?? ""])
+    taskId = nil
+  }
+
   private func beginBG(emit: @escaping (_ event: String, _ payload: [String: Any]) -> Void) {
     if bgTask == .invalid {
       bgTask = UIApplication.shared.beginBackgroundTask(withName: "TimedWorker") { [weak self] in
@@ -101,11 +112,7 @@ final class TimedWorker {
       emit("worker_progress", ["taskId": self.taskId ?? "", "remainingMs": self.remainingMs])
 
       if self.remainingMs <= 0 {
-        self.isRunning = false
-        self.stopTimer()
-        self.endBG()
-        self.remainingMs = 0
-        emit("worker_completed", ["taskId": self.taskId ?? ""])
+        self.complete(emit: emit)
       }
     }
     timer = t

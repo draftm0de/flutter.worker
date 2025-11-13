@@ -80,6 +80,9 @@ class DraftModeWorker {
   /// Cancels the currently running worker, if any.
   static Future<void> cancel() => _ch.invokeMethod('cancel');
 
+  /// Treats the running worker as completed immediately and notifies iOS.
+  static Future<void> completed() => _ch.invokeMethod('completed');
+
   /// Reads the latest worker status from iOS (useful after app relaunch).
   static Future<Map<String, dynamic>> status() async {
     final res = await _ch.invokeMethod('status');

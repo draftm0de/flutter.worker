@@ -1,3 +1,5 @@
+/// Bridges Flutter calls to the underlying `TimedWorker` singleton and keeps the
+/// platform channel wiring plus BGProcessing registration in one place.
 import Flutter
 import UIKit
 import BackgroundTasks
@@ -38,6 +40,10 @@ public class TimedWorkerPlugin: NSObject, FlutterPlugin {
 
       case "status":
         result(worker.statusDict())
+
+      case "completed":
+        worker.complete(emit: emit)
+        result(nil)
 
       default:
         result(FlutterMethodNotImplemented)

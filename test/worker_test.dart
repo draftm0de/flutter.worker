@@ -15,12 +15,12 @@ void main() {
     recordedCalls.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_channel, (call) async {
-      recordedCalls.add(call);
-      if (call.method == 'status') {
-        return {'isRunning': true, 'remainingMs': 1500, 'taskId': 'abc'};
-      }
-      return null;
-    });
+          recordedCalls.add(call);
+          if (call.method == 'status') {
+            return {'isRunning': true, 'remainingMs': 1500, 'taskId': 'abc'};
+          }
+          return null;
+        });
   });
 
   tearDown(() {
@@ -46,6 +46,12 @@ void main() {
     await DraftModeWorker.cancel();
 
     expect(recordedCalls.single.method, 'cancel');
+  });
+
+  test('completed notifies native side', () async {
+    await DraftModeWorker.completed();
+
+    expect(recordedCalls.single.method, 'completed');
   });
 
   test('status returns mapped response', () async {
@@ -75,10 +81,10 @@ void main() {
       final completer = Completer<void>();
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .handlePlatformMessage(
-        _channel.name,
-        data,
-        (_) => completer.complete(),
-      );
+            _channel.name,
+            data,
+            (_) => completer.complete(),
+          );
       await completer.future;
     }
 
