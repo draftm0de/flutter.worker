@@ -1,6 +1,7 @@
 name: draftmode_worker
 description: Lightweight timed worker for Flutter. Runs a short background task with duration and progress callbacks.
-version: 0.1.0
+publish_to: "none"
+version: 1.0.0+1
 homepage: https://draftmode.io/dev/flutter/worker
 license: MIT
 
@@ -17,8 +18,11 @@ flutter:
 dependencies:
   flutter:
     sdk: flutter
+  draftmode_ui:
+    path: ../ui
 
 dev_dependencies:
+  flutter_lints: ^6.0.0
   flutter_test:
     sdk: flutter
 

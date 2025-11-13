@@ -36,9 +36,14 @@ class TimedWorkerExampleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const CupertinoApp(
+    return CupertinoApp(
       debugShowCheckedModeBanner: false,
-      home: TimedWorkerDemo(),
+      home: DraftModeWorkerWatcher(
+        onSubmitNow: (taskId) async {
+          debugPrint('🚀 Submitting task $taskId early');
+        },
+        child: const TimedWorkerDemo(),
+      ),
     );
   }
 }
@@ -163,9 +168,12 @@ class _TimedWorkerDemoState extends State<TimedWorkerDemo> {
   }
 
   String _formatTimestamp(DateTime dateTime) {
-    final two = (int v) => v.toString().padLeft(2, '0');
-    return '${two(dateTime.hour)}:${two(dateTime.minute)}:${two(dateTime.second)}';
+    return '${_twoDigits(dateTime.hour)}:'
+        '${_twoDigits(dateTime.minute)}:'
+        '${_twoDigits(dateTime.second)}';
   }
+
+  String _twoDigits(int value) => value.toString().padLeft(2, '0');
 
   @override
   Widget build(BuildContext context) {

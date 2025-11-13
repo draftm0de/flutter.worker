@@ -5,6 +5,7 @@ with a simple timer-driven API. It ships with:
 
 - `DraftModeWorker` – starts/cancels workers and exposes lifecycle callbacks via a platform channel.
 - `DraftModeWorkerEvents` – a broadcast stream so multiple widgets/services can observe the worker without wiring direct callbacks.
+- `DraftModeWorkerWatcher` – a widget that surfaces a reminder dialog when the app resumes while a worker is still running.
 
 The `example/` app demonstrates how to hook those pieces into a Cupertino UI. It now consumes the shared `DraftModeExamplePageWidget` from `package:draftmode/example.dart` so every plugin demo in the DraftMode workspace can reuse the same header/branding without duplicating code.
 
@@ -61,6 +62,27 @@ final sub = DraftModeWorkerEvents.stream.listen((event) {
   }
 });
 ```
+
+### Prompt users on resume
+
+Embed `DraftModeWorkerWatcher` inside your app's `home` (or any widget that sits
+under a `Navigator`) to gently remind users about an in-flight worker after the
+app returns to the foreground:
+
+```dart
+return CupertinoApp(
+  home: DraftModeWorkerWatcher(
+    onSubmitNow: (taskId) async {
+      await flushPendingDraft(taskId);
+    },
+    child: const DraftEditorPage(),
+  ),
+);
+```
+
+The watcher automatically cancels the iOS worker when the user taps **Submit
+now** or **Cancel**. The optional callback is the perfect place to push any
+domain-specific logic (e.g. sending the final draft to your backend).
 
 ## Example app
 
