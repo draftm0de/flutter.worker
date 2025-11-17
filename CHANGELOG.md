@@ -4,7 +4,8 @@
 - Add repo-level ignore rules so generated Flutter/PODS artifacts from `example/ios` stay out of version control.
 - Summarize the README's example section now that the local `lib/widget/page.dart` scaffold moved into the shared package.
 - Teach the iOS plugin a `completed` MethodChannel method, reuse the Swift completion path, and expose the Dart `DraftModeWorker.completed()` helper in docs/tests so early submission no longer throws `MissingPluginException`.
-- Replace the watcher’s imperative dialog with the shared `DraftModeUIDialog`, simplify the API (no extra callbacks), and cover the flow with widget tests.
+- Require a new `onActiveWorker` callback on `DraftModeWorkerWatcher` so apps control how to handle active workers while still getting the status payload when the app resumes (the callback now receives only the worker map so apps can inject their own navigator dependencies).
+- Allow `DraftModeWorker.cancel()`/`.completed()` to accept an optional `fromUi` flag, propagate it through the MethodChannel/iOS plugin, emit a `worker_cancelled` event, and expose the origin via `onCompleted`/`onCancelled` callbacks plus `WorkerEvent.fromUi`.
 
 ## 0.1.0
 - Initial public release of DraftMode Worker

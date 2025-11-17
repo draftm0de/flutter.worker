@@ -6,8 +6,8 @@ homepage: https://draftmode.io/dev/flutter/worker
 license: MIT
 
 environment:
-  sdk: '>=3.8.0 <4.0.0'
-  flutter: ">=3.10.0"
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: "3.35.0"
 
 flutter:
   plugin:
@@ -19,8 +19,10 @@ flutter:
 dependencies:
   flutter:
     sdk: flutter
-  draftmode_ui:
-    path: ../ui
+#  draftmode_ui:
+#    path: ../ui
+#    git: https://github.com/draftm0de/flutter.ui
+#    version: ^1.0.0
 
 dev_dependencies:
   flutter_lints: ^6.0.0

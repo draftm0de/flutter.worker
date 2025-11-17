@@ -42,16 +42,18 @@ void main() {
     });
   });
 
-  test('cancel invokes cancel method', () async {
+  test('cancel invokes cancel method with flag', () async {
     await DraftModeWorker.cancel();
 
     expect(recordedCalls.single.method, 'cancel');
+    expect(recordedCalls.single.arguments, {'fromUi': false});
   });
 
-  test('completed notifies native side', () async {
-    await DraftModeWorker.completed();
+  test('completed notifies native side with flag', () async {
+    await DraftModeWorker.completed(fromUi: true);
 
     expect(recordedCalls.single.method, 'completed');
+    expect(recordedCalls.single.arguments, {'fromUi': true});
   });
 
   test('status returns mapped response', () async {
@@ -66,13 +68,23 @@ void main() {
     String? started;
     Duration? remaining;
     bool completed = false;
+    bool completedFromUi = false;
     bool expired = false;
+    bool cancelled = false;
+    bool cancelledFromUi = false;
 
     DraftModeWorker.init(
       onStarted: (id) => started = id,
       onProgress: (id, duration) => remaining = duration,
-      onCompleted: (id) => completed = true,
+      onCompleted: (id, fromUi) {
+        completed = true;
+        completedFromUi = fromUi;
+      },
       onExpired: (id) => expired = true,
+      onCancelled: (id, fromUi) {
+        cancelled = true;
+        cancelledFromUi = fromUi;
+      },
     );
 
     Future<void> send(String method, Map<String, Object?> args) async {
@@ -90,12 +102,16 @@ void main() {
 
     await send('worker_started', {'taskId': 'job-42'});
     await send('worker_progress', {'taskId': 'job-42', 'remainingMs': 750});
-    await send('worker_completed', {'taskId': 'job-42'});
+    await send('worker_completed', {'taskId': 'job-42', 'fromUi': true});
     await send('worker_expired', {'taskId': 'job-42'});
+    await send('worker_cancelled', {'taskId': 'job-42', 'fromUi': false});
 
     expect(started, 'job-42');
     expect(remaining, const Duration(milliseconds: 750));
     expect(completed, isTrue);
+    expect(completedFromUi, isTrue);
     expect(expired, isTrue);
+    expect(cancelled, isTrue);
+    expect(cancelledFromUi, isFalse);
   });
 }

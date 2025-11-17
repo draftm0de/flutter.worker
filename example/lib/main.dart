@@ -1,7 +1,8 @@
 import 'dart:async';
 
-import 'package:draftmode/worker.dart';
-import 'package:draftmode/example.dart';
+import 'package:draftmode_ui/components.dart';
+import 'package:draftmode_ui/pages.dart';
+import 'package:draftmode_worker/worker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
@@ -18,27 +19,70 @@ void main() {
       DraftModeWorkerEvents.dispatch(WorkerEvent.progress(id, remaining));
       debugPrint('⏳ Worker $id remaining: ${remaining.inSeconds}s');
     },
-    onCompleted: (id) {
-      DraftModeWorkerEvents.dispatch(WorkerEvent.completed(id));
-      debugPrint('✅ Worker $id completed');
+    onCompleted: (id, fromUi) {
+      DraftModeWorkerEvents.dispatch(
+        WorkerEvent.completed(id, fromUi: fromUi),
+      );
+      final origin = fromUi ? 'UI' : 'automatic';
+      debugPrint('✅ Worker $id completed via $origin');
     },
     onExpired: (id) {
       DraftModeWorkerEvents.dispatch(WorkerEvent.expired(id));
       debugPrint('⚠️ Worker $id expired (iOS cut off early)');
     },
+    onCancelled: (id, fromUi) {
+      DraftModeWorkerEvents.dispatch(
+        WorkerEvent.cancelled(id, fromUi: fromUi),
+      );
+      final origin = fromUi ? 'UI' : 'automatic';
+      debugPrint('🛑 Worker $id cancelled via $origin');
+    },
   );
 
-  runApp(const TimedWorkerExampleApp());
+  runApp(TimedWorkerExampleApp(navigatorKey: GlobalKey<NavigatorState>()));
 }
 
 class TimedWorkerExampleApp extends StatelessWidget {
-  const TimedWorkerExampleApp({super.key});
+  const TimedWorkerExampleApp({
+    super.key,
+    required this.navigatorKey,
+  });
+
+  final GlobalKey<NavigatorState> navigatorKey;
+
+  Future<void> _handleActiveWorker(
+    Map<String, dynamic> worker,
+  ) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) {
+      return;
+    }
+    final remaining = Duration(
+      milliseconds: (worker['remainingMs'] as num?)?.toInt() ?? 0,
+    );
+    final taskId = worker['taskId']?.toString();
+    final confirm = await DraftModeUIDialog.show(
+      context: context,
+      title: 'Active Worker',
+      message: 'Task: $taskId is still running. Submit now?',
+      autoConfirm: remaining,
+    );
+    if (confirm == true) {
+      await DraftModeWorker.completed(fromUi: true);
+    } else if (confirm == false) {
+      await DraftModeWorker.cancel(fromUi: true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return const CupertinoApp(
+    return CupertinoApp(
       debugShowCheckedModeBanner: false,
-      home: DraftModeWorkerWatcher(child: TimedWorkerDemo()),
+      navigatorKey: navigatorKey,
+      home: DraftModeWorkerWatcher(
+        onActiveWorker: _handleActiveWorker,
+        child: const TimedWorkerDemo(),
+      ),
     );
   }
 }
@@ -102,6 +146,13 @@ class _TimedWorkerDemoState extends State<TimedWorkerDemo> {
             isRunning = false;
           }
           remaining = event.remaining;
+          _completionMessage = null;
+          break;
+        case WorkerEventType.cancelled:
+          if (taskId == event.taskId) {
+            isRunning = false;
+          }
+          remaining = Duration.zero;
           _completionMessage = null;
           break;
       }
@@ -179,7 +230,7 @@ class _TimedWorkerDemoState extends State<TimedWorkerDemo> {
         ? CupertinoColors.activeGreen
         : CupertinoColors.label;
 
-    return DraftModeExamplePageWidget(
+    return DraftModeUIPageExample(
       title: 'Timed Worker iOS Demo',
       children: [
         Text('Task ID: ${taskId ?? "-"}', style: const TextStyle(fontSize: 16)),

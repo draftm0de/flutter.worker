@@ -35,14 +35,18 @@ public class TimedWorkerPlugin: NSObject, FlutterPlugin {
         result(nil)
 
       case "cancel":
-        worker.cancel()
+        let args = call.arguments as? [String: Any]
+        let fromUi = args?["fromUi"] as? Bool ?? false
+        worker.cancel(fromUi: fromUi, emit: emit)
         result(nil)
 
       case "status":
         result(worker.statusDict())
 
       case "completed":
-        worker.complete(emit: emit)
+        let args = call.arguments as? [String: Any]
+        let fromUi = args?["fromUi"] as? Bool ?? false
+        worker.complete(fromUi: fromUi, emit: emit)
         result(nil)
 
       default:

@@ -1,22 +1,37 @@
-import 'package:draftmode_ui/ui.dart';
-import 'package:flutter/cupertino.dart';
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 
 import 'worker.dart';
 
-/// Automatically prompts the user when a timed worker is still
-/// running after the app resumes (or cold starts).
+/// Signature used when the watcher detects an active worker.
+typedef DraftModeWorkerWatcherCallback = FutureOr<void> Function(
+  Map<String, dynamic> worker,
+);
+
+/// Monitors the worker state whenever the app resumes (or cold starts) and
+/// invokes [onActiveWorker] with the latest worker status when it is still
+/// running.
 ///
 /// Place this widget inside your `MaterialApp`/`CupertinoApp` **content**—for
-/// example around a page or via the `home:` parameter—so that it has access to
-/// a `Navigator`. When the worker is active it shows a simple
-/// `CupertinoAlertDialog` allowing the user to keep it running, submit early or
-/// cancel outright.
+/// example around a page or via the `home:` parameter—and inject whatever
+/// dependencies your callback needs (such as a navigator key or service).
 class DraftModeWorkerWatcher extends StatefulWidget {
   /// Wraps the portion of the UI that should stay mounted while the watcher is
   /// active. Usually this is the app's `home` widget or a shell around it.
   final Widget child;
 
-  const DraftModeWorkerWatcher({super.key, required this.child});
+  /// Invoked whenever the watcher discovers that a worker is still active.
+  ///
+  /// Use this to drive app-specific business logic (e.g. showing dialogs or
+  /// navigating) and decide whether to cancel/complete the worker.
+  final DraftModeWorkerWatcherCallback onActiveWorker;
+
+  const DraftModeWorkerWatcher({
+    super.key,
+    required this.child,
+    required this.onActiveWorker,
+  });
 
   @override
   State<DraftModeWorkerWatcher> createState() => _DraftModeWorkerWatcherState();
@@ -24,7 +39,7 @@ class DraftModeWorkerWatcher extends StatefulWidget {
 
 class _DraftModeWorkerWatcherState extends State<DraftModeWorkerWatcher>
     with WidgetsBindingObserver {
-  bool _dialogOpen = false;
+  bool _handlingWorker = false;
 
   @override
   void initState() {
@@ -51,32 +66,22 @@ class _DraftModeWorkerWatcherState extends State<DraftModeWorkerWatcher>
   }
 
   Future<void> _checkWorkerOnResume() async {
-    if (_dialogOpen || !mounted) return;
+    if (_handlingWorker || !mounted) return;
 
     try {
       final status = await DraftModeWorker.status();
       if (!mounted || status['isRunning'] != true) {
         return;
       }
-
-      _dialogOpen = true;
-      final remaining = Duration(
-        milliseconds: (status['remainingMs'] as num?)?.toInt() ?? 0,
+      _handlingWorker = true;
+      await Future.sync(
+        () => widget.onActiveWorker(
+          Map<String, dynamic>.from(status),
+        ),
       );
-
-      final taskId = status['taskId']?.toString();
-      final confirm = await DraftModeUIDialog.show(
-        context: context,
-        title: 'Active Worker',
-        message: 'Task: $taskId is still running. Submit now?',
-        autoConfirm: remaining,
-      );
-      if (confirm == true) {
-        await DraftModeWorker.completed();
-      } else if (confirm == false) {
-        await DraftModeWorker.cancel();
-      }
-    } catch (error, stackTrace) {
+    }
+    // coverage:ignore-start
+    catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
           exception: error,
@@ -85,8 +90,10 @@ class _DraftModeWorkerWatcherState extends State<DraftModeWorkerWatcher>
           context: ErrorDescription('while checking DraftModeWorker status'),
         ),
       );
-    } finally {
-      _dialogOpen = false;
+    }
+    // coverage:ignore-end
+    finally {
+      _handlingWorker = false;
     }
   }
 

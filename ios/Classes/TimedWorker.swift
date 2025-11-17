@@ -35,12 +35,20 @@ final class TimedWorker {
     emit("worker_started", ["taskId": taskId, "remainingMs": remainingMs])
   }
 
-  func cancel() {
+  func cancel(fromUi: Bool = false,
+              emit: ((_ event: String, _ payload: [String: Any]) -> Void)? = nil) {
+    let hadTask = isRunning
     isRunning = false
     stopTimer()
     endBG()
     remainingMs = 0
     storedTaskId = nil
+    if hadTask {
+      emit?("worker_cancelled", [
+        "taskId": taskId ?? "",
+        "fromUi": fromUi,
+      ])
+    }
     taskId = nil
   }
 
@@ -72,14 +80,18 @@ final class TimedWorker {
     completion(true)
   }
 
-  func complete(emit: @escaping (_ event: String, _ payload: [String: Any]) -> Void) {
+  func complete(fromUi: Bool = false,
+                emit: @escaping (_ event: String, _ payload: [String: Any]) -> Void) {
     guard isRunning else { return }
     isRunning = false
     stopTimer()
     endBG()
     remainingMs = 0
     storedTaskId = nil
-    emit("worker_completed", ["taskId": taskId ?? ""])
+    emit("worker_completed", [
+      "taskId": taskId ?? "",
+      "fromUi": fromUi,
+    ])
     taskId = nil
   }
 
@@ -112,7 +124,7 @@ final class TimedWorker {
       emit("worker_progress", ["taskId": self.taskId ?? "", "remainingMs": self.remainingMs])
 
       if self.remainingMs <= 0 {
-        self.complete(emit: emit)
+        self.complete(fromUi: false, emit: emit)
       }
     }
     timer = t

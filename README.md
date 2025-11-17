@@ -4,8 +4,8 @@ DraftMode Worker is a lightweight Flutter plugin that wraps iOS background tasks
 with a simple timer-driven API. It ships with:
 
 - `DraftModeWorker` – starts/cancels workers and exposes lifecycle callbacks via a platform channel.
-- `DraftModeWorkerEvents` – a broadcast stream so multiple widgets/services can observe the worker without wiring direct callbacks.
-- `DraftModeWorkerWatcher` – a widget that surfaces a reminder dialog when the app resumes while a worker is still running.
+- `DraftModeWorkerEvents` – a broadcast stream so multiple widgets/services can observe the worker (including cancellation/completion origins) without wiring direct callbacks.
+- `DraftModeWorkerWatcher` – a lifecycle helper that notifies your callback when the app resumes and the worker is still running so UI/business logic can stay app-specific.
 
 The `example/` app demonstrates how to hook those pieces into a Cupertino UI. It now consumes the shared `DraftModeExamplePageWidget` from `package:draftmode/example.dart` so every plugin demo in the DraftMode workspace can reuse the same header/branding without duplicating code.
 
@@ -21,10 +21,14 @@ Future<void> main() async {
     onStarted: (id) => DraftModeWorkerEvents.dispatch(WorkerEvent.started(id)),
     onProgress: (id, remaining) =>
         DraftModeWorkerEvents.dispatch(WorkerEvent.progress(id, remaining)),
-    onCompleted: (id) =>
-        DraftModeWorkerEvents.dispatch(WorkerEvent.completed(id)),
+    onCompleted: (id, fromUi) => DraftModeWorkerEvents.dispatch(
+      WorkerEvent.completed(id, fromUi: fromUi),
+    ),
     onExpired: (id) =>
         DraftModeWorkerEvents.dispatch(WorkerEvent.expired(id)),
+    onCancelled: (id, fromUi) => DraftModeWorkerEvents.dispatch(
+      WorkerEvent.cancelled(id, fromUi: fromUi),
+    ),
   );
 
   runApp(const MyApp());
@@ -43,13 +47,13 @@ await DraftModeWorker.start(
 ### Cancel the worker
 
 ```dart
-await DraftModeWorker.cancel();
+await DraftModeWorker.cancel(fromUi: true); // true when triggered by UI
 ```
 
 ### Complete the worker early
 
 ```dart
-await DraftModeWorker.completed();
+await DraftModeWorker.completed(fromUi: false); // default false = automatic
 ```
 
 ### Subscribe to lifecycle events
@@ -61,7 +65,12 @@ final sub = DraftModeWorkerEvents.stream.listen((event) {
       debugPrint('Remaining ${event.remaining}');
       break;
     case WorkerEventType.completed:
-      debugPrint('Done!');
+      final origin = event.fromUi ? 'UI' : 'automatic';
+      debugPrint('Done via $origin');
+      break;
+    case WorkerEventType.cancelled:
+      final cancelledBy = event.fromUi ? 'user' : 'system';
+      debugPrint('Cancelled by $cancelledBy');
       break;
     default:
       break;
@@ -73,19 +82,35 @@ final sub = DraftModeWorkerEvents.stream.listen((event) {
 
 Embed `DraftModeWorkerWatcher` inside your app's `home` (or any widget that sits
 under a `Navigator`) to gently remind users about an in-flight worker after the
-app returns to the foreground:
+app returns to the foreground. Provide a callback to decide how to handle the
+active worker (e.g. show a dialog, navigate, etc.). You can rely on your own
+`navigatorKey` or service locator if UI work is needed:
 
 ```dart
+final navigatorKey = GlobalKey<NavigatorState>();
+
 return CupertinoApp(
-  home: const DraftModeWorkerWatcher(
-    child: DraftEditorPage(),
+  navigatorKey: navigatorKey,
+  home: DraftModeWorkerWatcher(
+    child: const DraftEditorPage(),
+    onActiveWorker: (worker) async {
+      final context = navigatorKey.currentContext;
+      if (context == null) return;
+
+      final confirm = await DraftModeUIDialog.show(
+        context: context,
+        title: 'Active Worker',
+        message: 'Task: ${worker['taskId']} is still running. Submit now?',
+      );
+      if (confirm == true) {
+        await DraftModeWorker.completed(fromUi: true);
+      } else if (confirm == false) {
+        await DraftModeWorker.cancel(fromUi: true);
+      }
+    },
   ),
 );
 ```
-
-The watcher automatically calls `DraftModeWorker.completed()` when the user
-confirms and `DraftModeWorker.cancel()` when they back out—no extra callback
-plumbing required.
 
 ## Example app
 

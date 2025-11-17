@@ -1,30 +1,34 @@
 import 'dart:async';
 
 /// Discrete worker lifecycle notifications emitted by the iOS background task.
-enum WorkerEventType { started, progress, completed, expired }
+enum WorkerEventType { started, progress, completed, expired, cancelled }
 
 /// Lightweight event payload that is broadcast to listeners inside the plugin
 /// as well as any consuming apps. Convenience factories keep call‑sites tidy
 /// and ensure the `remaining` duration is only present when it is meaningful.
 class WorkerEvent {
-  const WorkerEvent._(this.type, this.taskId, this.remaining);
+  const WorkerEvent._(this.type, this.taskId, this.remaining, this.fromUi);
 
   /// Emitted when iOS tells us the worker began executing.
   factory WorkerEvent.started(String taskId) =>
-      WorkerEvent._(WorkerEventType.started, taskId, null);
+      WorkerEvent._(WorkerEventType.started, taskId, null, false);
 
   /// Emitted periodically while the worker is alive with the remaining time
   /// reported by iOS.
   factory WorkerEvent.progress(String taskId, Duration remaining) =>
-      WorkerEvent._(WorkerEventType.progress, taskId, remaining);
+      WorkerEvent._(WorkerEventType.progress, taskId, remaining, false);
 
   /// Emitted once the worker completes successfully.
-  factory WorkerEvent.completed(String taskId) =>
-      WorkerEvent._(WorkerEventType.completed, taskId, Duration.zero);
+  factory WorkerEvent.completed(String taskId, {bool fromUi = false}) =>
+      WorkerEvent._(WorkerEventType.completed, taskId, Duration.zero, fromUi);
 
   /// Emitted if iOS expires the worker early (e.g. background budget ended).
   factory WorkerEvent.expired(String taskId) =>
-      WorkerEvent._(WorkerEventType.expired, taskId, Duration.zero);
+      WorkerEvent._(WorkerEventType.expired, taskId, Duration.zero, false);
+
+  /// Emitted when the worker is cancelled before completion.
+  factory WorkerEvent.cancelled(String taskId, {bool fromUi = false}) =>
+      WorkerEvent._(WorkerEventType.cancelled, taskId, Duration.zero, fromUi);
 
   /// Type of lifecycle event that occurred.
   final WorkerEventType type;
@@ -34,6 +38,9 @@ class WorkerEvent {
 
   /// Remaining runtime reported by iOS. Only set for `progress` events.
   final Duration? remaining;
+
+  /// Whether the user triggered the action (completion/cancellation).
+  final bool fromUi;
 }
 
 /// Tiny event bus that exposes the worker lifecycle as a broadcast [Stream].
