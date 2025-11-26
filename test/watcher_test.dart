@@ -28,13 +28,13 @@ void main() {
 
   Future<void> pumpWatcher(
     WidgetTester tester,
-    DraftModeWorkerWatcherCallback onActiveWorker,
+    DraftModeWorkerWatcherCallback onEvent,
   ) {
     return tester.pumpWidget(
       MaterialApp(
         home: DraftModeWorkerWatcher(
           child: const Placeholder(),
-          onActiveWorker: onActiveWorker,
+          onEvent: onEvent,
         ),
       ),
     );

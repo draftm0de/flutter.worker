@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:draftmode_ui/components.dart';
 import 'package:draftmode_ui/pages.dart';
+import 'package:draftmode_worker/event.dart';
 import 'package:draftmode_worker/worker.dart';
+import 'package:draftmode_worker_example/events/queued.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
@@ -87,6 +89,37 @@ class _HomeScreenState extends State<HomeScreen> {
         _completionMessage = null;
       });
     }
+  }
+
+  Future<void> _startEvent() async {
+    final event = ExampleQueueEvent(
+      id: 'queued-${DateTime.now().millisecondsSinceEpoch}',
+    );
+    DraftModeEventQueue.shared.add(event);
+    debugPrint("_startEvent: produced");
+  }
+
+  Future<void> _startEventDelayed() async {
+    final seconds = int.tryParse(_secondsController.text);
+    if (seconds == null || seconds <= 0) {
+      setState(() {
+        _inputError = 'Enter seconds greater than 0';
+      });
+      return;
+    }
+    setState(() {
+      _inputError = null;
+    });
+    debugPrint("_startEventDelayed: enqueued");
+
+    unawaited(Future<void>(() async {
+      await Future.delayed(Duration(seconds: seconds));
+      final event = ExampleQueueEvent(
+        id: 'queued-${DateTime.now().millisecondsSinceEpoch}',
+      );
+      DraftModeEventQueue.shared.add(event);
+      debugPrint("_startEventDelayed: produced");
+    }));
   }
 
   Future<void> _startWorker() async {
@@ -203,7 +236,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPressed: isRunning ? _cancelWorker : null,
                 child: const Text('Cancel Worker'),
               ),
-            )
+            ),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton(
+                onPressed: _startEvent,
+                child: const Text('Queue Event (instantly)'),
+              ),
+            ),
+            SizedBox(
+              width: double.infinity,
+              child: CupertinoButton(
+                onPressed: _startEventDelayed,
+                child: const Text('Queue Event (delay)'),
+              ),
+            ),
           ],
         ),
       ],

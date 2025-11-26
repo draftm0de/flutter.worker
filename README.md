@@ -93,7 +93,7 @@ return CupertinoApp(
   navigatorKey: navigatorKey,
   home: DraftModeWorkerWatcher(
     child: const DraftEditorPage(),
-    onActiveWorker: (worker) async {
+    onEvent: (worker) async {
       final context = navigatorKey.currentContext;
       if (context == null) return;
 

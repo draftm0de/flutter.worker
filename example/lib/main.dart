@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:draftmode_ui/context.dart';
 import 'package:draftmode_worker/worker.dart';
 import 'package:flutter/cupertino.dart';
 import 'app.dart';
@@ -35,6 +36,7 @@ Future<void> main() async {
       debugPrint('🛑 Worker $id cancelled via $origin');
     },
   );
+  DraftModeUIContext.init(navigatorKey: _navigatorKey);
   runApp(App(navigatorKey: _navigatorKey));
 }
 

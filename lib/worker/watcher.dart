@@ -10,8 +10,7 @@ typedef DraftModeWorkerWatcherCallback = FutureOr<void> Function(
 );
 
 /// Monitors the worker state whenever the app resumes (or cold starts) and
-/// invokes [onActiveWorker] with the latest worker status when it is still
-/// running.
+/// invokes [onEvent] with the latest worker status when it is still running.
 ///
 /// Place this widget inside your `MaterialApp`/`CupertinoApp` **content**—for
 /// example around a page or via the `home:` parameter—and inject whatever
@@ -25,12 +24,12 @@ class DraftModeWorkerWatcher extends StatefulWidget {
   ///
   /// Use this to drive app-specific business logic (e.g. showing dialogs or
   /// navigating) and decide whether to cancel/complete the worker.
-  final DraftModeWorkerWatcherCallback onActiveWorker;
+  final DraftModeWorkerWatcherCallback onEvent;
 
   const DraftModeWorkerWatcher({
     super.key,
     required this.child,
-    required this.onActiveWorker,
+    required this.onEvent,
   });
 
   @override
@@ -75,7 +74,7 @@ class _DraftModeWorkerWatcherState extends State<DraftModeWorkerWatcher>
       }
       _handlingWorker = true;
       await Future.sync(
-        () => widget.onActiveWorker(
+        () => widget.onEvent(
           Map<String, dynamic>.from(status),
         ),
       );
