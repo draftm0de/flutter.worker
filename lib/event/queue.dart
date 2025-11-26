@@ -22,7 +22,8 @@ class DraftModeEventQueue with WidgetsBindingObserver {
 
   /// Call this from your event producer (background/foreground).
   void add<T extends Object?>(T event, {Duration? delay}) {
-    final envelope = DraftModeEventElement(event, delay: delay);
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final envelope = DraftModeEventElement<T>(id, event, delay: delay);
     if (_isForeground) {
       _controller.add(envelope); // Deliver immediately while we have UI.
     } else {
