@@ -1,118 +1,159 @@
 import 'dart:async';
-import 'package:flutter/services.dart';
+
+import '../worker/event.dart';
+import '../worker/worker.dart' as timed;
 
 /// Callback invoked when iOS reports that the worker has started.
 typedef DraftModeEventWorkerStarted = void Function(String eventId);
 
 /// Callback invoked while the worker is running with the remaining runtime.
-typedef DraftModeEventWorkerProgress = void Function(String eventId, Duration remaining);
+typedef DraftModeEventWorkerProgress = void Function(
+  String eventId,
+  Duration remaining,
+);
 
 /// Callback invoked after iOS notifies that the worker finished successfully.
-typedef DraftModeEventWorkerCompleted = void Function(String eventId, bool fromUi);
+typedef DraftModeEventWorkerCompleted = void Function(
+  String eventId,
+  bool fromUi,
+);
 
 /// Callback invoked when iOS expires the worker (e.g. time budget consumed).
 typedef DraftModeEventWorkerExpired = void Function(String eventId);
 
 /// Callback invoked when the worker is cancelled before finishing.
-typedef DraftModeEventWorkerCancelled = void Function(String eventId, bool fromUi);
+typedef DraftModeEventWorkerCancelled = void Function(
+  String eventId,
+  bool fromUi,
+);
 
-/// Public API that bridges the Flutter side to the iOS timed worker.
-///
-/// It exposes a handful of static helpers to start/cancel a worker and
-/// delivers lifecycle callbacks from the underlying platform channel.
+/// Public API that bridges the Flutter side to the iOS timed worker specifically
+/// for DraftMode event queue usage. It reuses the core `DraftModeWorker`
+/// plumbing so the app only needs a single platform channel handler.
 class DraftModeEventWorker {
   DraftModeEventWorker._(); // coverage:ignore-line
-  static const _ch = MethodChannel('timed_worker_ios/channel');
 
-  static DraftModeEventWorkerStarted? _onStarted;
-  static DraftModeEventWorkerProgress? _onProgress;
-  static DraftModeEventWorkerCompleted? _onCompleted;
-  static DraftModeEventWorkerExpired? _onExpired;
-  static DraftModeEventWorkerCancelled? _onCancelled;
+  static final Map<Object, _DraftModeEventWorkerCallbacks> _listeners =
+      <Object, _DraftModeEventWorkerCallbacks>{};
+  static final Object _defaultToken = Object();
+  static StreamSubscription<WorkerEvent>? _sub;
 
-  /// Initializes the iOS bridge. Call exactly once (e.g. inside `main`).
-  ///
-  /// The optional callbacks allow apps to react immediately to lifecycle
-  /// changes in addition to (or instead of) the broadcast stream in
-  /// `DraftModeWorkerEvents`.
+  /// Initializes the worker listener. Safe to call multiple times—provide a
+  /// unique [token] if you need to register without clobbering other
+  /// subscribers (otherwise subsequent calls override the previous callbacks).
   static void init({
+    Object? token,
     DraftModeEventWorkerStarted? onStarted,
     DraftModeEventWorkerProgress? onProgress,
     DraftModeEventWorkerCompleted? onCompleted,
     DraftModeEventWorkerExpired? onExpired,
     DraftModeEventWorkerCancelled? onCancelled,
   }) {
-    _onStarted = onStarted;
-    _onProgress = onProgress;
-    _onCompleted = onCompleted;
-    _onExpired = onExpired;
-    _onCancelled = onCancelled;
+    final key = token ?? _defaultToken;
+    if (_listeners.containsKey(key)) {
+      _listeners[key] = _listeners[key]!.copyWith(
+        onStarted: onStarted,
+        onProgress: onProgress,
+        onCompleted: onCompleted,
+        onExpired: onExpired,
+        onCancelled: onCancelled,
+      );
+    } else {
+      _listeners[key] = _DraftModeEventWorkerCallbacks(
+        onStarted: onStarted,
+        onProgress: onProgress,
+        onCompleted: onCompleted,
+        onExpired: onExpired,
+        onCancelled: onCancelled,
+      );
+    }
 
-    _ch.setMethodCallHandler((call) async {
-      final m = Map<String, dynamic>.from(call.arguments as Map? ?? {});
-      switch (call.method) {
-        case 'worker_started':
-          _onStarted?.call(m['eventId'] as String);
-          break;
-        case 'worker_progress':
-          _onProgress?.call(
-            m['eventId'] as String,
-            Duration(milliseconds: (m['remainingMs'] as num).toInt()),
-          );
-          break;
-        case 'worker_completed':
-          _onCompleted?.call(
-            m['eventId'] as String,
-            (m['fromUi'] as bool?) ?? false,
-          );
-          break;
-        case 'worker_cancelled':
-          _onCancelled?.call(
-            m['eventId'] as String,
-            (m['fromUi'] as bool?) ?? false,
-          );
-          break;
-        case 'worker_expired':
-          _onExpired?.call(m['eventId'] as String);
-          break;
-      }
-    });
+    _sub ??= DraftModeWorkerEvents.stream.listen(_handleWorkerEvent);
   }
 
-  /// Starts a new worker on iOS for the provided [duration] and [taskId].
-  /// The ID is echoed back in callbacks and events so multiple workers can be
-  /// distinguished if needed.
+  static void remove(Object token) {
+    _listeners.remove(token);
+    if (_listeners.isEmpty) {
+      _sub?.cancel();
+      _sub = null;
+    }
+  }
+
+  static void _handleWorkerEvent(WorkerEvent event) {
+    final listeners = List<_DraftModeEventWorkerCallbacks>.from(_listeners.values);
+    for (final listener in listeners) {
+      listener.handle(event);
+    }
+  }
+
+  /// Starts (or resumes) the shared timed worker for the supplied [eventId].
   static Future<void> start({
+    required String eventId,
     required Duration duration,
   }) {
-    final taskId = DateTime.now().millisecondsSinceEpoch.toString();
-    return _ch.invokeMethod('start', {
-      'eventId': taskId,
-      'durationMs': duration.inMilliseconds,
-    });
+    return timed.DraftModeWorker.start(taskId: eventId, duration: duration);
   }
 
   /// Cancels the currently running worker, if any.
-  ///
-  /// Set [fromUi] to true when the user explicitly cancelled the worker so
-  /// downstream listeners can tell whether automation or UI drove the action.
-  static Future<void> cancel({bool fromUi = false}) => _ch.invokeMethod(
-        'cancel',
-        {'fromUi': fromUi},
-      );
+  static Future<void> cancel({bool fromUi = false}) =>
+      timed.DraftModeWorker.cancel(fromUi: fromUi);
 
   /// Treats the running worker as completed immediately and notifies iOS.
-  ///
-  /// Use [fromUi] to flag whether the UI requested completion or it happened
-  /// automatically (e.g. countdown elapsed and iOS called `complete`).
-  static Future<void> completed({bool fromUi = false}) => _ch.invokeMethod(
-        'completed',
-        {'fromUi': fromUi},
-      );
+  static Future<void> completed({bool fromUi = false}) =>
+      timed.DraftModeWorker.completed(fromUi: fromUi);
 
   /// Reads the latest worker status from iOS (useful after app relaunch).
-  static Future<Map<String, dynamic>> status() async {
-    final res = await _ch.invokeMethod('status');
-    return Map<String, dynamic>.from(res as Map? ?? {});
+  static Future<Map<String, dynamic>> status() => timed.DraftModeWorker.status();
+}
+
+class _DraftModeEventWorkerCallbacks {
+  const _DraftModeEventWorkerCallbacks({
+    this.onStarted,
+    this.onProgress,
+    this.onCompleted,
+    this.onExpired,
+    this.onCancelled,
+  });
+
+  final DraftModeEventWorkerStarted? onStarted;
+  final DraftModeEventWorkerProgress? onProgress;
+  final DraftModeEventWorkerCompleted? onCompleted;
+  final DraftModeEventWorkerExpired? onExpired;
+  final DraftModeEventWorkerCancelled? onCancelled;
+
+  _DraftModeEventWorkerCallbacks copyWith({
+    DraftModeEventWorkerStarted? onStarted,
+    DraftModeEventWorkerProgress? onProgress,
+    DraftModeEventWorkerCompleted? onCompleted,
+    DraftModeEventWorkerExpired? onExpired,
+    DraftModeEventWorkerCancelled? onCancelled,
+  }) {
+    return _DraftModeEventWorkerCallbacks(
+      onStarted: onStarted ?? this.onStarted,
+      onProgress: onProgress ?? this.onProgress,
+      onCompleted: onCompleted ?? this.onCompleted,
+      onExpired: onExpired ?? this.onExpired,
+      onCancelled: onCancelled ?? this.onCancelled,
+    );
+  }
+
+  void handle(WorkerEvent event) {
+    switch (event.type) {
+      case WorkerEventType.started:
+        onStarted?.call(event.taskId);
+        break;
+      case WorkerEventType.progress:
+        onProgress?.call(event.taskId, event.remaining ?? Duration.zero);
+        break;
+      case WorkerEventType.completed:
+        onCompleted?.call(event.taskId, event.fromUi);
+        break;
+      case WorkerEventType.expired:
+        onExpired?.call(event.taskId);
+        break;
+      case WorkerEventType.cancelled:
+        onCancelled?.call(event.taskId, event.fromUi);
+        break;
+    }
   }
 }

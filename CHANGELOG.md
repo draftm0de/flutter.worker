@@ -5,7 +5,9 @@
 - Summarize the README's example section now that the local `lib/widget/page.dart` scaffold moved into the shared package.
 - Teach the iOS plugin a `completed` MethodChannel method, reuse the Swift completion path, and expose the Dart `DraftModeWorker.completed()` helper in docs/tests so early submission no longer throws `MissingPluginException`.
 - Require a new `onEvent` callback on `DraftModeWorkerWatcher` so apps control how to handle active workers while still getting the status payload when the app resumes (the callback now receives only the worker map so apps can inject their own navigator dependencies).
-- Expand the `DraftModeEventWatcher.onEvent` signature to surface a `DraftModeEventElement`, exposing the original payload plus its creation timestamp/optional delay for consumers that need metadata.
+- Expand the `DraftModeEventWatcher.onEvent` signature to surface a `DraftModeEventMessage`, exposing the original payload plus its creation timestamp/optional delay for consumers that need metadata.
+- Allow `DraftModeEventQueue.push` to accept an `autoConfirm` duration which routes the event through the background worker, re-delivering it with `DraftModeEventMessage.state == expired` when the worker fires.
+- Track per-message state (pending/completed/expired/cancelled) so handlers can differentiate whether an event came from normal foreground flow or a worker expiry.
 - Allow `DraftModeWorker.cancel()`/`.completed()` to accept an optional `fromUi` flag, propagate it through the MethodChannel/iOS plugin, emit a `worker_cancelled` event, and expose the origin via `onCompleted`/`onCancelled` callbacks plus `WorkerEvent.fromUi`.
 
 ## 0.1.0

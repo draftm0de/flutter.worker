@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
-import 'element.dart';
+import 'message.dart';
 import 'queue.dart';
 
 /// Hooks into the global [DraftModeEventQueue] and invokes the callbacks
@@ -10,8 +10,10 @@ class DraftModeEventWatcher extends StatefulWidget {
   /// active. Usually this is the app's `home` widget or a shell around it.
   final Widget child;
 
-  /// Handler invoked whenever the queue delivers an event to the UI.
-  final Future<bool> Function(DraftModeEventElement element) onEvent;
+  /// Handler invoked whenever the queue delivers an event to the UI. Inspect
+  /// [DraftModeEventMessage.state] to differentiate between normal foreground
+  /// delivery (`completed`) and worker-driven callbacks (`expired`).
+  final Future<bool> Function(DraftModeEventMessage element) onEvent;
 
   const DraftModeEventWatcher({
     super.key,
@@ -24,7 +26,7 @@ class DraftModeEventWatcher extends StatefulWidget {
 }
 
 class _DraftModeEventWatcherState extends State<DraftModeEventWatcher> {
-  StreamSubscription<DraftModeEventElement>? _sub;
+  StreamSubscription<DraftModeEventMessage>? _sub;
 
   @override
   void initState() {
@@ -38,9 +40,10 @@ class _DraftModeEventWatcherState extends State<DraftModeEventWatcher> {
     super.dispose();
   }
 
-  Future<void> _handleEvent(DraftModeEventElement envelope) async {
+  Future<void> _handleEvent(DraftModeEventMessage message) async {
+    bool handled = false;
     try {
-      await widget.onEvent(envelope);
+      handled = await widget.onEvent(message);
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
@@ -48,11 +51,12 @@ class _DraftModeEventWatcherState extends State<DraftModeEventWatcher> {
           stack: stackTrace,
           library: 'draftmode_worker',
           context: ErrorDescription(
-            'while handling DraftMode event ${envelope.event.runtimeType}',
+            'while handling DraftMode event ${message.event.runtimeType}',
           ),
         ),
       );
     }
+    DraftModeEventQueue.shared.resolve(message, handled: handled);
   }
 
   @override

@@ -1,6 +1,5 @@
 import 'package:draftmode_ui/components.dart';
 import 'package:draftmode_worker/event.dart';
-import 'package:draftmode_worker/worker.dart';
 import 'package:draftmode_worker_example/events/queued.dart';
 import 'package:draftmode_worker_example/screen/home.dart';
 import 'package:flutter/cupertino.dart';
@@ -13,53 +12,50 @@ class App extends StatelessWidget {
     required this.navigatorKey,
   });
 
-  Future<void> _handleActiveWorker(Map<String, dynamic> worker) async {
-    DraftModeEventQueue.shared.add(
-      ActiveWorkerEvent(Map<String, dynamic>.from(worker)),
-    );
-  }
-
-  Future<bool> _showActiveWorkerDialog(Map<String, dynamic> worker) async {
-    final context = navigatorKey.currentContext;
-    if (context == null) {
-      return false;
-    }
-    final remaining = Duration(
-      milliseconds: (worker['remainingMs'] as num?)?.toInt() ?? 0,
-    );
-    final taskId = worker['taskId']?.toString();
-    final confirm = await DraftModeUIDialog.show(
-      context: context,
-      title: 'Active Worker',
-      message: 'Task: $taskId is still running. Submit now?',
-      autoConfirm: remaining,
-    );
-    if (confirm == true) {
-      await DraftModeWorker.completed(fromUi: true);
-    } else if (confirm == false) {
-      await DraftModeWorker.cancel(fromUi: true);
-    }
-    return true;
-  }
-
-  Future<bool> _showQueuedEventDialog(ExampleQueueEvent event) async {
+  Future<bool> _confirmEvent(ExampleQueueEvent event, Duration? autoConfirm) async {
     final result = await const DraftModeUIShowDialog().show(
       title: 'Queued Event',
       message: 'Event ${event.id} consumed.',
       confirmLabel: 'OK',
       cancelLabel: 'Later',
+      autoConfirm: autoConfirm
     );
-    return result == true;
+    if (result == true) {
+      await _executeEvent(event);
+    } else {
+      debugPrint("execute Event denied");
+    }
+    return true;
   }
 
-  Future<bool> _handleDraftModeEvent(DraftModeEventElement element) {
-    final event = element.event;
-    if (event is ActiveWorkerEvent) {
-      return _showActiveWorkerDialog(event.worker);
-    }
+  Future<bool> _executeEvent(ExampleQueueEvent event) async {
+    debugPrint("execute event");
+    return true;
+  }
+
+  Future<bool> _handleEvent(DraftModeEventMessage message) {
+    final event = message.event;
     if (event is ExampleQueueEvent) {
-      debugPrint('Queue event ${event.id} created at ${element.createdAt.toIso8601String()}');
-      return _showQueuedEventDialog(event);
+      debugPrint(
+        'Queue event ${event.id} (${message.state}) created at '
+            '${message.createdAt.toIso8601String()}',
+      );
+      if (message.autoConfirm != null) {
+        switch (message.state) {
+          case DraftModeEventMessageState.expired:
+          case DraftModeEventMessageState.completed:
+            return _executeEvent(event);
+          case DraftModeEventMessageState.pending:
+            return _confirmEvent(event, message.autoConfirm);
+          default:
+            break;
+        }
+        debugPrint(
+            "Queue Event with autoConfirm state: ${message.state}");
+        return Future.value(true);
+      } else {
+        return _confirmEvent(event, null);
+      }
     }
     debugPrint('Unhandled DraftMode event: $event');
     return Future.value(false);
@@ -68,7 +64,7 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DraftModeEventWatcher(
-      onEvent: _handleDraftModeEvent,
+      onEvent: _handleEvent,
       child: CupertinoApp(
         debugShowCheckedModeBanner: false,
         navigatorKey: navigatorKey,

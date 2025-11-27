@@ -21,6 +21,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _secondsController = TextEditingController(
     text: '20',
   );
+  final TextEditingController _autoConfirmController = TextEditingController(
+    text: '20',
+  );
   String? _inputError;
   StreamSubscription<WorkerEvent>? _workerEventsSub;
   String? _completionMessage;
@@ -90,35 +93,44 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
-
-  Future<void> _startEvent() async {
-    final event = ExampleQueueEvent(
-      id: 'queued-${DateTime.now().millisecondsSinceEpoch}',
-    );
-    DraftModeEventQueue.shared.add(event);
-    debugPrint("_startEvent: produced");
-  }
-
-  Future<void> _startEventDelayed() async {
+  int _getStartDelay() {
     final seconds = int.tryParse(_secondsController.text);
     if (seconds == null || seconds <= 0) {
-      setState(() {
-        _inputError = 'Enter seconds greater than 0';
-      });
-      return;
+      throw 'Enter seconds greater than 0';
     }
-    setState(() {
-      _inputError = null;
-    });
-    debugPrint("_startEventDelayed: enqueued");
+    return seconds;
+  }
+
+  Future<void> _startEvent() async {
+    final seconds = _getStartDelay();
+    debugPrint("_startEvent: enqueued");
 
     unawaited(Future<void>(() async {
       await Future.delayed(Duration(seconds: seconds));
       final event = ExampleQueueEvent(
         id: 'queued-${DateTime.now().millisecondsSinceEpoch}',
       );
-      DraftModeEventQueue.shared.add(event);
-      debugPrint("_startEventDelayed: produced");
+      DraftModeEventQueue.shared.push(event);
+      debugPrint("_startEvent: produced");
+    }));
+  }
+
+  Future<void> _startTimedEvent() async {
+    final autoConfirm = int.tryParse(_autoConfirmController.text);
+    if (autoConfirm == null || autoConfirm <= 0) {
+      throw 'Enter autoConfirm greater than 0';
+    }
+    final seconds = _getStartDelay();
+
+    debugPrint("_startTimedEvent: enqueued");
+
+    unawaited(Future<void>(() async {
+      await Future.delayed(Duration(seconds: seconds));
+      final event = ExampleQueueEvent(
+        id: 'queued-${DateTime.now().millisecondsSinceEpoch}',
+      );
+      DraftModeEventQueue.shared.push(event, autoConfirm: Duration(seconds: autoConfirm));
+      debugPrint("_startTimedEvent: produced");
     }));
   }
 
@@ -203,6 +215,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         DraftModeUISection(
           header: "Configuration",
+          labelWidth: 130,
           children: [
             DraftModeUIRow(CupertinoTextField(
               controller: _secondsController,
@@ -210,7 +223,20 @@ class _HomeScreenState extends State<HomeScreen> {
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               placeholder: 'e.g. 20',
               enabled: !isRunning,
-            ), label: "Delay (sec)"),
+            ), label: "Delay", expanded: Text('sec')),
+            if (_inputError != null) ...[
+              DraftModeUIRow(Text(
+                _inputError!,
+                style: const TextStyle(color: CupertinoColors.systemRed),
+              )),
+            ],
+            DraftModeUIRow(CupertinoTextField(
+              controller: _autoConfirmController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              placeholder: 'e.g. 20',
+              enabled: !isRunning,
+            ), label: "AutoConfirm", expanded: Text('sec')),
             if (_inputError != null) ...[
               DraftModeUIRow(Text(
                 _inputError!,
@@ -223,34 +249,9 @@ class _HomeScreenState extends State<HomeScreen> {
         DraftModeUISection(
           transparent: true,
           children: [
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoButton.filled(
-                onPressed: isRunning ? null : _startWorker,
-                child: const Text('Start Worker'),
-              ),
-            ),
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoButton(
-                onPressed: isRunning ? _cancelWorker : null,
-                child: const Text('Cancel Worker'),
-              ),
-            ),
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoButton(
-                onPressed: _startEvent,
-                child: const Text('Queue Event (instantly)'),
-              ),
-            ),
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoButton(
-                onPressed: _startEventDelayed,
-                child: const Text('Queue Event (delay)'),
-              ),
-            ),
+            DraftModeUIButton.text('Event (confirm, !autoConfirm)', onPressed: _startEvent),
+            const SizedBox(height: 5),
+            DraftModeUIButton.text('timedEvent (autoConfirm)', onPressed: _startTimedEvent),
           ],
         ),
       ],
