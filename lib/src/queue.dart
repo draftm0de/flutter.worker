@@ -16,12 +16,12 @@ class DraftModeEventQueue with WidgetsBindingObserver {
   /// Configures the worker bridge once so iOS lifecycle events propagate to
   /// the queue/watchers automatically. Call this during app bootstrap (e.g. in
   /// `main`) so background completions flow without extra wiring.
-  static void bootstrap({
-    FutureOr<bool> Function(DraftModeEventMessage message)? onWorkerMessage,
+  static void init({
+    FutureOr<bool> Function(DraftModeEventMessage message)? onEvent,
     void Function(WorkerEvent event)? onWorkerLifecycle,
   }) {
-    if (onWorkerMessage != null) {
-      _workerMessageHandler = onWorkerMessage;
+    if (onEvent != null) {
+      _workerMessageHandler = onEvent;
     }
     if (onWorkerLifecycle != null) {
       _workerLifecycleListener = onWorkerLifecycle;
@@ -79,8 +79,8 @@ class DraftModeEventQueue with WidgetsBindingObserver {
   bool _waitingForResume = false;
 
   // FIFO of events waiting for the timed worker to auto-confirm.
-  final List<DraftModeEventMessage> _workerQueue = <DraftModeEventMessage>[];
-  DraftModeEventMessage? _workerActive;
+  final List<DraftModeEventMessage> _enqueuedEvents = <DraftModeEventMessage>[];
+  DraftModeEventMessage? _enqueudEvent;
 
   // Fast lookup so worker callbacks can update queue metadata.
   final Map<String, DraftModeEventMessage> _workerById =
@@ -97,83 +97,134 @@ class DraftModeEventQueue with WidgetsBindingObserver {
   /// so the worker callbacks are wired up.
   void push<T extends Object?>(T event, {Duration? autoConfirm}) {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
+
+    // create new message
+    // : default.state = pending
     final message = DraftModeEventMessage<T>(id, event, autoConfirm: autoConfirm);
+
+    // add message to List<DraftModeEventMessage>
+    debugPrint("queue:push: queue-$id pushed added to List<_pending>");
     _pending.add(message);
-    if (message.managedByWorker && autoConfirm != null) {
+
+    // handle message for background
+    if (message.managedByWorker) {
       message.ready = true; // surface pending state immediately
-      _workerQueue.add(message);
+      debugPrint("queue:push: queue-$id pushed to List<_enqueuedEvents>");
+      _enqueuedEvents.add(message);
+      debugPrint("queue:push: queue-$id pushed to _workerById");
       _workerById[id] = message;
-      _startNextWorker();
+      _startEnqueuedEvents();
     }
+
     if (_isForeground) {
-      _dispatch();
+      _dispatchNextEvent();
     }
   }
 
+  /// appState changes background - foreground or foreground - background
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _isForeground = state == AppLifecycleState.resumed;
+    bool stateIsForeground = state == AppLifecycleState.resumed;
+    if (stateIsForeground == _isForeground) return;
+    _isForeground = stateIsForeground;
+    String switchTo = _isForeground ? "Foreground" : "Background";
+    debugPrint("queue:didChangeAppLifecycleState changed to: $switchTo");
+
     if (_isForeground) {
       _waitingForResume = false;
-      _dispatch();
+      _dispatchNextEvent();
     }
   }
 
   /// Surfaces the next ready event to listeners when foregrounded.
-  void _dispatch() {
+  void _dispatchNextEvent() {
     if (!_isForeground || _active != null || _waitingForResume) {
       return;
     }
+
+    // fetch next (!autoConfirmed) message by state.ready
+    // messages with autoConfirm are in default: !read
+    // messages without autoConfirm are in default: ready
     final index = _pending.indexWhere((message) => message.ready);
-    if (index == -1) return;
+
+    // none fetch, return
+    if (index == -1)  {
+      debugPrint("queue:_dispatchNextEvent, no message enqueued");
+      return;
+    }
+
+    // get related message
     final message = _pending[index];
+
+    // for !timedMessages, change state to completed (default state = pending)
     if (!message.managedByWorker &&
         message.state == DraftModeEventMessageState.pending) {
       message.state = DraftModeEventMessageState.completed;
     }
+
+    // assign _active message
     _active = message;
     _debugDispatched.add(message.id);
+
+    // attach those message to streamController
+    // triggers the watcher.event
+    debugPrint("queue:_dispatchNextEvent, queued-${message.id} pushed to streamController");
     _controller.add(message);
   }
 
   /// Marks the [message] as handled (remove) or pending (await resume).
   void resolve(
     DraftModeEventMessage message, {
-    required bool handled,
+    required bool acknowledge,
   }) {
+    debugPrint("queue:resolve, queued-${message.id}, acknowledge: $acknowledge");
     final active = _active;
+    final bool hasActive = active != null;
+
+    // get message from _pending List
     final index = _pending.indexWhere((element) => element.id == message.id);
+    final bool hasIndex = index != -1;
+
+    debugPrint("queue:resolve, queued-${message.id}, managedByWorker: ${message.managedByWorker}, state: ${message.state}");
     final bool isPendingWorker =
         message.managedByWorker &&
         message.state == DraftModeEventMessageState.pending;
-    final bool shouldRemove = handled && !isPendingWorker;
-    final bool shouldPause = !handled && !isPendingWorker;
+    debugPrint("queue:resolve, queued-${message.id}, isPendingWorker: $isPendingWorker");
 
-    if (active != null && active.id == message.id) {
+    final bool shouldRemove = acknowledge && !isPendingWorker;
+    final bool shouldPause = !acknowledge && !isPendingWorker;
+    debugPrint("queue:resolve, queued-${message.id}, shouldRemove: $shouldRemove, shouldPause: $shouldPause, hasActive: $hasActive (${active?.id})");
+
+    if (hasActive && active.id == message.id) {
       if (shouldRemove) {
-        if (index != -1) {
+        if (hasIndex) {
+          debugPrint("queue:resolve, queued-${message.id} > remove from _pending");
           _pending.removeAt(index);
         }
+      // acknowledge=false + not pendingWorker
       } else if (shouldPause) {
         _waitingForResume = true;
       } else if (isPendingWorker) {
         message.ready = false; // Wait for worker completion before replaying.
       }
       _active = null;
-    } else if (shouldRemove && index != -1) {
+    } else if (shouldRemove && hasIndex) {
+      debugPrint("queue:resolve, queued-${message.id} > remove from _pending");
       _pending.removeAt(index);
     }
 
     if (shouldRemove) {
+      debugPrint("queue:resolve, queued-${message.id} > remove from _workerById");
       _workerById.remove(message.id);
-      if (_workerActive?.id == message.id) {
-        _workerActive = null;
-        _startNextWorker();
+      if (_enqueudEvent?.id == message.id) {
+        _enqueudEvent = null;
+        _startEnqueuedEvents();
       }
     }
 
     if (_isForeground) {
-      _dispatch();
+      // continue with dispatchingEvents
+      _dispatchNextEvent();
     }
   }
 
@@ -182,8 +233,8 @@ class DraftModeEventQueue with WidgetsBindingObserver {
     _pending.clear();
     _active = null;
     _waitingForResume = false;
-    _workerQueue.clear();
-    _workerActive = null;
+    _enqueuedEvents.clear();
+    _enqueudEvent = null;
     _workerById.clear();
     _debugDispatched.clear();
   }
@@ -220,21 +271,28 @@ class DraftModeEventQueue with WidgetsBindingObserver {
   }
 
   /// Runs the iOS worker for the next queued auto-confirm event.
-  void _startNextWorker() {
-    if (_workerActive != null) {
+  void _startEnqueuedEvents() {
+    if (_enqueudEvent != null) {
       return;
     }
-    while (_workerQueue.isNotEmpty) {
-      final candidate = _workerQueue.removeAt(0);
+    while (_enqueuedEvents.isNotEmpty) {
+      final candidate = _enqueuedEvents.removeAt(0);
+      debugPrint("queue:_startEnqueuedEvents: use next queued-${candidate.id}");
       if (!_pending.contains(candidate)) {
+        debugPrint("queue:_startEnqueuedEvents: event not in List<_pending> => continue and remove from _workerById");
         _workerById.remove(candidate.id);
         continue;
       }
       final duration = candidate.autoConfirm;
       if (duration == null) {
+        debugPrint("queue:_startEnqueuedEvents: event has no autoConfirm => continue");
         continue;
       }
-      _workerActive = candidate;
+
+      // set _enqueudEvent = candidate
+      _enqueudEvent = candidate;
+
+      debugPrint("queue:_startEnqueuedEvents: trigger > DraftModeEventWorker.start");
       DraftModeEventWorker.start(
         eventId: candidate.id,
         duration: duration,
@@ -291,12 +349,12 @@ class DraftModeEventQueue with WidgetsBindingObserver {
   /// Cleans up worker bookkeeping once iOS reports a terminal state.
   void _finalizeWorker(String eventId) {
     _workerById.remove(eventId);
-    if (_workerActive?.id == eventId) {
-      _workerActive = null;
-      _startNextWorker();
+    if (_enqueudEvent?.id == eventId) {
+      _enqueudEvent = null;
+      _startEnqueuedEvents();
     }
     if (_isForeground) {
-      _dispatch();
+      _dispatchNextEvent();
     }
   }
 
@@ -324,7 +382,7 @@ class DraftModeEventQueue with WidgetsBindingObserver {
       } else {
         message.ready = true;
         if (_isForeground) {
-          _dispatch();
+          _dispatchNextEvent();
         }
       }
     });

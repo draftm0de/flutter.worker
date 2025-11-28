@@ -11,7 +11,7 @@ final ExampleQueueHandler _queueHandler = ExampleQueueHandler();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  DraftModeEventQueue.bootstrap(onWorkerMessage: _queueHandler.handleEvent);
+  DraftModeEventQueue.init(onEvent: _queueHandler.handleBackendEvent);
   DraftModeUIContext.init(navigatorKey: _navigatorKey);
   runApp(App(
     navigatorKey: _navigatorKey,

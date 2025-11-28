@@ -6,51 +6,68 @@ import 'event.dart';
 
 class ExampleQueueHandler {
 
-  Future<bool> handleEvent(DraftModeEventMessage message) {
+  Future<bool> handleBackendEvent(DraftModeEventMessage message) async {
     final event = message.event;
     if (event is ExampleQueueEvent) {
-      debugPrint(
-        'Queue event ${event.id} (${message.state}) created at '
-            '${message.createdAt.toIso8601String()}',
-      );
+      debugPrint('handleBackendEvent: ${event.id} (${message.state}) consuming');
+    }
+    bool acknowledge = true;
+    debugPrint('handleBackendEvents: acknowledge: $acknowledge');
+    return acknowledge;
+  }
+
+  Future<bool> handleForegroundEvent(DraftModeEventMessage message) async {
+    final event = message.event;
+    bool acknowledge = true;
+    if (event is ExampleQueueEvent) {
+      debugPrint('handleForegroundEvent: ${event.id} (${message.state}) consuming');
       if (message.autoConfirm != null) {
+        debugPrint("handleForegroundEvent: event with autoConfirm");
         switch (message.state) {
           case DraftModeEventMessageState.expired:
           case DraftModeEventMessageState.completed:
-            return executeEvent(event);
+            acknowledge = await executeEvent(event);
+          break;
           case DraftModeEventMessageState.pending:
-            return confirmEvent(event, message.autoConfirm);
+            acknowledge = await confirmEvent(event, null); //, message.autoConfirm);
+          break;
           default:
+            acknowledge = false;
             break;
         }
-        debugPrint(
-            "Queue Event with autoConfirm state: ${message.state}");
-        return Future.value(true);
       } else {
-        return confirmEvent(event, null);
+        acknowledge = await confirmEvent(event, null);
       }
+    } else {
+      debugPrint('handleForegroundEvent: ${event.id} (${message.state}) unknown');
+      acknowledge = false;
     }
-    debugPrint('Unhandled DraftMode event: $event');
-    return Future.value(false);
+    debugPrint('handleForegroundEvent: acknowledge: $acknowledge');
+    return acknowledge;
   }
 
 
   Future<bool> confirmEvent(ExampleQueueEvent event, Duration? autoConfirm) async {
-    final result = await const DraftModeUIShowDialog().show(
+    final confirmed = await const DraftModeUIShowDialog().show(
         title: 'Queued Event',
         message: 'Event ${event.id} consumed.',
         confirmLabel: 'OK',
         cancelLabel: 'Later',
         autoConfirm: autoConfirm
     );
-    if (result == true) {
-      await executeEvent(event);
+    bool acknowledge;
+    if (confirmed == true) {
+      debugPrint("confirmEvent: agreed");
+      acknowledge = await executeEvent(event);
     } else {
-      debugPrint("execute Event denied");
+      debugPrint("confirmEvent: denied");
+      acknowledge = true;
     }
-    return true;
+    debugPrint("confirmEvent: acknowledge: $acknowledge");
+    return acknowledge;
   }
 
+  // execute can failure, events should not be acknowledged
   Future<bool> executeEvent(ExampleQueueEvent event) async {
     debugPrint("execute event");
     return true;

@@ -52,8 +52,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final event = ExampleQueueEvent(
         id: 'queued-${DateTime.now().millisecondsSinceEpoch}',
       );
+      debugPrint("home:_startEvent: > DraftModeEventQueue.shared.push");
       DraftModeEventQueue.shared.push(event);
-      debugPrint("_startEvent: produced");
     }));
   }
 
@@ -64,15 +64,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final seconds = _getStartDelay();
 
-    debugPrint("_startTimedEvent: enqueued");
+    debugPrint("home:_startTimedEvent: enqueued");
 
     unawaited(Future<void>(() async {
       await Future.delayed(Duration(seconds: seconds));
       final event = ExampleQueueEvent(
         id: 'queued-${DateTime.now().millisecondsSinceEpoch}',
       );
+      debugPrint("home:_startTimedEvent: > DraftModeEventQueue.shared.push(+autoConfirm)");
       DraftModeEventQueue.shared.push(event, autoConfirm: Duration(seconds: autoConfirm));
-      debugPrint("_startTimedEvent: produced");
     }));
   }
 

@@ -131,7 +131,7 @@ void main() {
     // Watcher should be notified immediately with a pending message.
     final pendingMessage = await streamQueue.next;
     expect(pendingMessage.state, DraftModeEventMessageState.pending);
-    DraftModeEventQueue.shared.resolve(pendingMessage, handled: true);
+    DraftModeEventQueue.shared.resolve(pendingMessage, acknowledge: true);
 
     DraftModeWorkerEvents.dispatch(WorkerEvent.expired(eventId));
     await tester.pump();
@@ -143,7 +143,7 @@ void main() {
     expect(DraftModeEventQueue.shared.debugDeliveredIds, isNotEmpty);
 
     final message = await streamQueue.next;
-    DraftModeEventQueue.shared.resolve(message, handled: true);
+    DraftModeEventQueue.shared.resolve(message, acknowledge: true);
     delivered.add(message);
 
     expect(delivered, hasLength(1));

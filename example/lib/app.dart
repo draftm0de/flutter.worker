@@ -17,7 +17,7 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DraftModeEventWatcher(
-      onEvent: queueHandler.handleEvent,
+      onEvent: queueHandler.handleForegroundEvent,
       child: CupertinoApp(
         debugShowCheckedModeBanner: false,
         navigatorKey: navigatorKey,

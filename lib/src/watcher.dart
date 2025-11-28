@@ -41,9 +41,11 @@ class _DraftModeEventWatcherState extends State<DraftModeEventWatcher> {
   }
 
   Future<void> _handleEvent(DraftModeEventMessage message) async {
-    bool handled = false;
+    bool acknowledge = false;
     try {
-      handled = await widget.onEvent(message);
+      debugPrint("watcher:_handleEvent");
+      acknowledge = await widget.onEvent(message);
+      debugPrint("watcher:_handleEvent: acknowledge: $acknowledge");
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
@@ -56,7 +58,8 @@ class _DraftModeEventWatcherState extends State<DraftModeEventWatcher> {
         ),
       );
     }
-    DraftModeEventQueue.shared.resolve(message, handled: handled);
+    debugPrint("watcher:_handleEvent: > acknowledge: DraftModeEventQueue.shared.resolve");
+    DraftModeEventQueue.shared.resolve(message, acknowledge: acknowledge);
   }
 
   @override

@@ -134,9 +134,9 @@ void main() {
 
     final lifecycleEvents = <WorkerEvent>[];
     final callbackEvents = <DraftModeEventMessage>[];
-    DraftModeEventQueue.bootstrap(
+    DraftModeEventQueue.init(
       onWorkerLifecycle: lifecycleEvents.add,
-      onWorkerMessage: (message) {
+      onEvent: (message) {
         callbackEvents.add(message);
         return true;
       },
