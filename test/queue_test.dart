@@ -59,48 +59,6 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('replays pending events after lifecycle resume when deferred', (
-    tester,
-  ) async {
-    final delivered = <String>[];
-    final completions = <Completer<bool>>[];
-
-    await _pumpWatcher(tester, (element) async {
-      delivered.add(element.event as String);
-      final completer = Completer<bool>();
-      completions.add(completer);
-      return completer.future;
-    });
-
-    DraftModeEventQueue.shared.push('confirm');
-    await tester.pump();
-    expect(delivered, ['confirm']);
-
-    // Defer the event, which should pause further delivery.
-    completions.removeAt(0).complete(false);
-    await tester.pump();
-    expect(delivered, ['confirm']);
-
-    DraftModeEventQueue.shared.push('later');
-    await tester.pump();
-    expect(delivered, ['confirm']);
-
-    // Simulate the app returning to the foreground to replay the pending event.
-    DraftModeEventQueue.shared
-        .didChangeAppLifecycleState(AppLifecycleState.resumed);
-    await tester.pump();
-
-    expect(delivered, ['confirm', 'confirm']);
-
-    // Handle the replayed event which should then allow the next event through.
-    completions.removeAt(0).complete(true);
-    await tester.pump();
-    expect(delivered, ['confirm', 'confirm', 'later']);
-
-    completions.removeAt(0).complete(true);
-    await tester.pump();
-  });
-
   testWidgets('autoConfirm messages wait for worker expiration', (tester) async {
     const channel = MethodChannel('timed_worker_ios/channel');
     MethodCall? startCall;

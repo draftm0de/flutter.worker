@@ -9,10 +9,10 @@ class ExampleQueueHandler {
   Future<bool> handleBackendEvent(DraftModeEventMessage message) async {
     final event = message.event;
     if (event is ExampleQueueEvent) {
-      debugPrint('handleBackendEvent: ${event.id} (${message.state}) consuming');
+      debugPrint('handler:handleBackendEvent: ${event.id} (${message.state}) consuming');
     }
     bool acknowledge = true;
-    debugPrint('handleBackendEvents: acknowledge: $acknowledge');
+    debugPrint('handler:handleBackendEvents: acknowledge: $acknowledge');
     return acknowledge;
   }
 
@@ -20,16 +20,16 @@ class ExampleQueueHandler {
     final event = message.event;
     bool acknowledge = true;
     if (event is ExampleQueueEvent) {
-      debugPrint('handleForegroundEvent: ${event.id} (${message.state}) consuming');
+      debugPrint('handler:handleForegroundEvent: ${event.id} (${message.state}) consuming');
       if (message.autoConfirm != null) {
-        debugPrint("handleForegroundEvent: event with autoConfirm");
+        debugPrint("handler:handleForegroundEvent: event with autoConfirm");
         switch (message.state) {
           case DraftModeEventMessageState.expired:
           case DraftModeEventMessageState.completed:
             acknowledge = await executeEvent(event);
           break;
           case DraftModeEventMessageState.pending:
-            acknowledge = await confirmEvent(event, null); //, message.autoConfirm);
+            acknowledge = await confirmEvent(event, message.autoConfirm);
           break;
           default:
             acknowledge = false;
@@ -39,10 +39,10 @@ class ExampleQueueHandler {
         acknowledge = await confirmEvent(event, null);
       }
     } else {
-      debugPrint('handleForegroundEvent: ${event.id} (${message.state}) unknown');
+      debugPrint('handler:handleForegroundEvent: ${event.id} (${message.state}) unknown');
       acknowledge = false;
     }
-    debugPrint('handleForegroundEvent: acknowledge: $acknowledge');
+    debugPrint('handler:handleForegroundEvent: acknowledge: $acknowledge');
     return acknowledge;
   }
 
@@ -51,25 +51,25 @@ class ExampleQueueHandler {
     final confirmed = await const DraftModeUIShowDialog().show(
         title: 'Queued Event',
         message: 'Event ${event.id} consumed.',
-        confirmLabel: 'OK',
-        cancelLabel: 'Later',
+        confirmLabel: 'Yey',
+        cancelLabel: 'No',
         autoConfirm: autoConfirm
     );
     bool acknowledge;
     if (confirmed == true) {
-      debugPrint("confirmEvent: agreed");
+      debugPrint("handler:confirmEvent: agreed");
       acknowledge = await executeEvent(event);
     } else {
-      debugPrint("confirmEvent: denied");
+      debugPrint("handler:confirmEvent: denied");
       acknowledge = true;
     }
-    debugPrint("confirmEvent: acknowledge: $acknowledge");
+    debugPrint("handler:confirmEvent: acknowledge: $acknowledge");
     return acknowledge;
   }
 
   // execute can failure, events should not be acknowledged
   Future<bool> executeEvent(ExampleQueueEvent event) async {
-    debugPrint("execute event");
+    debugPrint("handler:execute event");
     return true;
   }
 

@@ -14,7 +14,7 @@ class DraftModeEventQueue with WidgetsBindingObserver {
   static void Function(WorkerEvent event)? _workerLifecycleListener;
 
   /// Configures the worker bridge once so iOS lifecycle events propagate to
-  /// the queue/watchers automatically. Call this during app bootstrap (e.g. in
+  /// the queue/watchers automatically. Call this during app init (e.g. in
   /// `main`) so background completions flow without extra wiring.
   static void init({
     FutureOr<bool> Function(DraftModeEventMessage message)? onEvent,
@@ -76,7 +76,6 @@ class DraftModeEventQueue with WidgetsBindingObserver {
   // Currently surfaced message (only one at a time by design).
   DraftModeEventMessage? _active;
   bool _isForeground = false;
-  bool _waitingForResume = false;
 
   // FIFO of events waiting for the timed worker to auto-confirm.
   final List<DraftModeEventMessage> _enqueuedEvents = <DraftModeEventMessage>[];
@@ -93,8 +92,8 @@ class DraftModeEventQueue with WidgetsBindingObserver {
   /// Specify [autoConfirm] to offload delivery to the iOS worker—useful when
   /// the app might be backgrounded for an extended period. The message will be
   /// surfaced to [DraftModeEventWatcher] only after the worker fires (e.g.
-  /// expired/completed). Ensure your app calls `DraftModeEventQueue.bootstrap`
-  /// so the worker callbacks are wired up.
+  /// expired/completed). Ensure your app calls `DraftModeEventQueue.init` so the
+  /// worker callbacks are wired up.
   void push<T extends Object?>(T event, {Duration? autoConfirm}) {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
 
@@ -131,14 +130,13 @@ class DraftModeEventQueue with WidgetsBindingObserver {
     debugPrint("queue:didChangeAppLifecycleState changed to: $switchTo");
 
     if (_isForeground) {
-      _waitingForResume = false;
       _dispatchNextEvent();
     }
   }
 
   /// Surfaces the next ready event to listeners when foregrounded.
   void _dispatchNextEvent() {
-    if (!_isForeground || _active != null || _waitingForResume) {
+    if (!_isForeground || _active != null) {
       return;
     }
 
@@ -191,9 +189,10 @@ class DraftModeEventQueue with WidgetsBindingObserver {
         message.state == DraftModeEventMessageState.pending;
     debugPrint("queue:resolve, queued-${message.id}, isPendingWorker: $isPendingWorker");
 
-    final bool shouldRemove = acknowledge && !isPendingWorker;
-    final bool shouldPause = !acknowledge && !isPendingWorker;
-    debugPrint("queue:resolve, queued-${message.id}, shouldRemove: $shouldRemove, shouldPause: $shouldPause, hasActive: $hasActive (${active?.id})");
+    final bool shouldRemove = !isPendingWorker;
+    debugPrint(
+      "queue:resolve, queued-${message.id}, shouldRemove: $shouldRemove, hasActive: $hasActive (${active?.id})",
+    );
 
     if (hasActive && active.id == message.id) {
       if (shouldRemove) {
@@ -201,9 +200,6 @@ class DraftModeEventQueue with WidgetsBindingObserver {
           debugPrint("queue:resolve, queued-${message.id} > remove from _pending");
           _pending.removeAt(index);
         }
-      // acknowledge=false + not pendingWorker
-      } else if (shouldPause) {
-        _waitingForResume = true;
       } else if (isPendingWorker) {
         message.ready = false; // Wait for worker completion before replaying.
       }
@@ -232,7 +228,6 @@ class DraftModeEventQueue with WidgetsBindingObserver {
   void debugReset() {
     _pending.clear();
     _active = null;
-    _waitingForResume = false;
     _enqueuedEvents.clear();
     _enqueudEvent = null;
     _workerById.clear();
