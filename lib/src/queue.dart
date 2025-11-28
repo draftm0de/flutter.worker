@@ -8,6 +8,43 @@ import 'worker.dart';
 /// pending items as soon as we return to the foreground.
 class DraftModeEventQueue with WidgetsBindingObserver {
   static const Object _workerToken = Object();
+  static bool _workerBridgeInitialized = false;
+  static FutureOr<bool> Function(DraftModeEventMessage message)?
+      _workerMessageHandler;
+  static void Function(WorkerEvent event)? _workerLifecycleListener;
+
+  /// Configures the worker bridge once so iOS lifecycle events propagate to
+  /// the queue/watchers automatically. Call this during app bootstrap (e.g. in
+  /// `main`) so background completions flow without extra wiring.
+  static void bootstrap({
+    FutureOr<bool> Function(DraftModeEventMessage message)? onWorkerMessage,
+    void Function(WorkerEvent event)? onWorkerLifecycle,
+  }) {
+    if (onWorkerMessage != null) {
+      _workerMessageHandler = onWorkerMessage;
+    }
+    if (onWorkerLifecycle != null) {
+      _workerLifecycleListener = onWorkerLifecycle;
+    }
+    if (_workerBridgeInitialized) return;
+    _workerBridgeInitialized = true;
+
+    void dispatch(WorkerEvent event) {
+      DraftModeWorkerEvents.dispatch(event);
+      _workerLifecycleListener?.call(event);
+    }
+
+    DraftModeWorker.init(
+      onStarted: (id) => dispatch(WorkerEvent.started(id)),
+      onProgress: (id, remaining) =>
+          dispatch(WorkerEvent.progress(id, remaining)),
+      onCompleted: (id, fromUi) =>
+          dispatch(WorkerEvent.completed(id, fromUi: fromUi)),
+      onExpired: (id) => dispatch(WorkerEvent.expired(id)),
+      onCancelled: (id, fromUi) =>
+          dispatch(WorkerEvent.cancelled(id, fromUi: fromUi)),
+    );
+  }
 
   DraftModeEventQueue._internal() {
     final binding = WidgetsBinding.instance;
@@ -56,8 +93,8 @@ class DraftModeEventQueue with WidgetsBindingObserver {
   /// Specify [autoConfirm] to offload delivery to the iOS worker—useful when
   /// the app might be backgrounded for an extended period. The message will be
   /// surfaced to [DraftModeEventWatcher] only after the worker fires (e.g.
-  /// expired/completed). Ensure your app calls `DraftModeWorker.init` so the
-  /// worker callbacks are wired up.
+  /// expired/completed). Ensure your app calls `DraftModeEventQueue.bootstrap`
+  /// so the worker callbacks are wired up.
   void push<T extends Object?>(T event, {Duration? autoConfirm}) {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
     final message = DraftModeEventMessage<T>(id, event, autoConfirm: autoConfirm);
@@ -166,9 +203,20 @@ class DraftModeEventQueue with WidgetsBindingObserver {
   @visibleForTesting
   List<String> get debugDeliveredIds => List<String>.unmodifiable(_debugDispatched);
 
+  @visibleForTesting
+  List<DraftModeEventMessage> get debugPendingMessages =>
+      List<DraftModeEventMessage>.unmodifiable(_pending);
+
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _controller.close();
+  }
+
+  @visibleForTesting
+  static void debugResetBootstrap() {
+    _workerBridgeInitialized = false;
+    _workerMessageHandler = null;
+    _workerLifecycleListener = null;
   }
 
   /// Runs the iOS worker for the next queued auto-confirm event.
@@ -213,7 +261,11 @@ class DraftModeEventQueue with WidgetsBindingObserver {
     if (message == null) return;
     message.state = DraftModeEventMessageState.completed;
     message.ready = true;
+    final shouldHandleInBackground = !_isForeground;
     _finalizeWorker(eventId);
+    if (shouldHandleInBackground) {
+      _handleBackgroundWorkerMessage(message);
+    }
   }
 
   void _handleWorkerExpired(String eventId) {
@@ -221,7 +273,11 @@ class DraftModeEventQueue with WidgetsBindingObserver {
     if (message == null) return;
     message.state = DraftModeEventMessageState.expired;
     message.ready = true;
+    final shouldHandleInBackground = !_isForeground;
     _finalizeWorker(eventId);
+    if (shouldHandleInBackground) {
+      _handleBackgroundWorkerMessage(message);
+    }
   }
 
   void _handleWorkerCancelled(String eventId, bool fromUi) {
@@ -241,6 +297,46 @@ class DraftModeEventQueue with WidgetsBindingObserver {
     }
     if (_isForeground) {
       _dispatch();
+    }
+  }
+
+  void _handleBackgroundWorkerMessage(DraftModeEventMessage message) {
+    final handler = _workerMessageHandler;
+    if (handler == null) return;
+    message.ready = false;
+    Future<void>(() async {
+      bool handled = false;
+      try {
+        handled = await Future<bool>.sync(() => handler(message));
+      } catch (error, stackTrace) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            library: 'draftmode_worker',
+            context: ErrorDescription('while handling background event ${message.id}'),
+          ),
+        );
+      }
+
+      if (handled) {
+        _removePendingMessage(message.id);
+      } else {
+        message.ready = true;
+        if (_isForeground) {
+          _dispatch();
+        }
+      }
+    });
+  }
+
+  void _removePendingMessage(String messageId) {
+    final index = _pending.indexWhere((element) => element.id == messageId);
+    if (index != -1) {
+      _pending.removeAt(index);
+    }
+    if (_active?.id == messageId) {
+      _active = null;
     }
   }
 }
