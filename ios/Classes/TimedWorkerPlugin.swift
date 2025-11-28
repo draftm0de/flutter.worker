@@ -55,7 +55,14 @@ public class TimedWorkerPlugin: NSObject, FlutterPlugin {
   }
 
   private func emit(_ event: String, _ payload: [String: Any]) {
-    channel.invokeMethod(event, arguments: payload)
+    let send = {
+      self.channel.invokeMethod(event, arguments: payload)
+    }
+    if Thread.isMainThread {
+      send()
+    } else {
+      DispatchQueue.main.async(execute: send)
+    }
   }
 
   // Optional: schedule a deferred resume if we were cut off

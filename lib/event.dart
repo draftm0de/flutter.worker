@@ -1,3 +1,4 @@
-export 'event/message.dart';
-export 'event/queue.dart';
-export 'event/watcher.dart';
+export 'src/message.dart';
+export 'src/queue.dart';
+export 'src/watcher.dart';
+export 'src/worker.dart';

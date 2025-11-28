@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:draftmode_worker/worker.dart';
+import 'package:draftmode_worker/event.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:async/async.dart';
 import 'package:draftmode_worker/event.dart';
-import 'package:draftmode_worker/worker.dart' show DraftModeWorkerEvents, WorkerEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';

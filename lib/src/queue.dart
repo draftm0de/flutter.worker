@@ -27,14 +27,25 @@ class DraftModeEventQueue with WidgetsBindingObserver {
 
   static final DraftModeEventQueue shared = DraftModeEventQueue._internal();
 
+  // Broadcast stream consumed by the watcher so UI stays in sync with queue.
   final _controller = StreamController<DraftModeEventMessage>.broadcast();
+
+  // Pending events waiting for either confirmation or an app resume.
   final List<DraftModeEventMessage> _pending = <DraftModeEventMessage>[];
+
+  // Helpful breadcrumb when tests want to assert dispatch order.
   final List<String> _debugDispatched = <String>[];
+
+  // Currently surfaced message (only one at a time by design).
   DraftModeEventMessage? _active;
   bool _isForeground = false;
   bool _waitingForResume = false;
+
+  // FIFO of events waiting for the timed worker to auto-confirm.
   final List<DraftModeEventMessage> _workerQueue = <DraftModeEventMessage>[];
   DraftModeEventMessage? _workerActive;
+
+  // Fast lookup so worker callbacks can update queue metadata.
   final Map<String, DraftModeEventMessage> _workerById =
       <String, DraftModeEventMessage>{};
 
@@ -71,6 +82,7 @@ class DraftModeEventQueue with WidgetsBindingObserver {
     }
   }
 
+  /// Surfaces the next ready event to listeners when foregrounded.
   void _dispatch() {
     if (!_isForeground || _active != null || _waitingForResume) {
       return;
@@ -159,6 +171,7 @@ class DraftModeEventQueue with WidgetsBindingObserver {
     _controller.close();
   }
 
+  /// Runs the iOS worker for the next queued auto-confirm event.
   void _startNextWorker() {
     if (_workerActive != null) {
       return;
@@ -219,6 +232,7 @@ class DraftModeEventQueue with WidgetsBindingObserver {
     _finalizeWorker(eventId);
   }
 
+  /// Cleans up worker bookkeeping once iOS reports a terminal state.
   void _finalizeWorker(String eventId) {
     _workerById.remove(eventId);
     if (_workerActive?.id == eventId) {
